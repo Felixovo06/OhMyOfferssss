@@ -545,7 +545,6 @@ updated_at
 
 推荐技术栈：
 
-- 产品设计：Figma
 - 应用框架：Next.js App Router
 - 开发语言：TypeScript
 - UI 实现：Tailwind CSS + shadcn/ui
@@ -561,13 +560,13 @@ updated_at
 
 - Next.js 可以同时承载页面、API Route 和服务端逻辑，适合快速做 MVP。
 - Prisma 能快速定义数据库模型和迁移，便于后续迭代。
-- shadcn/ui 和 Tailwind 适合从 Figma 设计稿快速还原界面。
+- shadcn/ui 和 Tailwind 适合快速搭建一致、可维护的后台型界面。
 - Redis 只承担缓存、导入状态和限流，不在第一版引入复杂消息队列。
 
-Figma 协作约定：
+前端实现约定：
 
-- Figma 负责页面布局、视觉规范、组件状态和关键交互。
-- 开发侧按 Figma 组件命名同步到前端组件，例如 `QuestionCard`、`ImportPreviewTable`、`InterviewPanel`。
+- 第一版直接在代码中实现界面，不依赖 Figma 设计稿。
+- 组件命名围绕业务语义，例如 `QuestionCard`、`ImportPreviewTable`、`InterviewPanel`。
 - 第一版优先实现桌面端体验，移动端保证可用但不做深度优化。
 
 ### 9.2 数据存储
