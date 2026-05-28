@@ -3,7 +3,6 @@ import { redirect } from "next/navigation";
 import { ShieldCheck } from "lucide-react";
 import type { Route } from "next";
 import { loginUser } from "@/server/auth/service";
-import { devLoginCredentials, devLoginEnabled } from "@/server/auth/dev-login";
 
 export default async function LoginPage({
   searchParams,
@@ -90,15 +89,6 @@ export default async function LoginPage({
             登录
           </button>
         </form>
-
-        {devLoginEnabled ? (
-          <div className="mt-5 rounded-2xl border border-white/75 bg-white/45 px-4 py-3 text-sm leading-6 text-neutral-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.85)]">
-            <p className="font-medium text-neutral-900">测试账号</p>
-            <p className="mt-1">
-              {devLoginCredentials.email} / {devLoginCredentials.password}
-            </p>
-          </div>
-        ) : null}
 
         <p className="mt-6 text-center text-sm text-neutral-500">
           查看{" "}
