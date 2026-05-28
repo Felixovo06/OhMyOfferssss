@@ -1,0 +1,19 @@
+.DS_Store
+
+# Local secrets
+.env
+.env.*
+!.env.example
+
+# Dependencies and build outputs
+node_modules/
+.next/
+dist/
+build/
+coverage/
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
