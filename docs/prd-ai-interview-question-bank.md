@@ -539,7 +539,38 @@ updated_at
 
 ## 9. 技术与运行配置
 
-### 9.1 数据存储
+### 9.1 技术栈选择
+
+第一版以最快开发和最少工程复杂度为优先级，采用单体全栈应用，不拆独立前后端服务。
+
+推荐技术栈：
+
+- 产品设计：Figma
+- 应用框架：Next.js App Router
+- 开发语言：TypeScript
+- UI 实现：Tailwind CSS + shadcn/ui
+- 表单：React Hook Form + Zod
+- 数据库：PostgreSQL
+- ORM：Prisma
+- 缓存和任务状态：Redis
+- AI 调用：统一 OpenAI-compatible LLM Client
+- 鉴权：第一版使用简单账号登录，优先 NextAuth/Auth.js 或自定义邮箱密码登录
+- 部署：优先单应用部署，后续再拆 worker 或队列服务
+
+选择原因：
+
+- Next.js 可以同时承载页面、API Route 和服务端逻辑，适合快速做 MVP。
+- Prisma 能快速定义数据库模型和迁移，便于后续迭代。
+- shadcn/ui 和 Tailwind 适合从 Figma 设计稿快速还原界面。
+- Redis 只承担缓存、导入状态和限流，不在第一版引入复杂消息队列。
+
+Figma 协作约定：
+
+- Figma 负责页面布局、视觉规范、组件状态和关键交互。
+- 开发侧按 Figma 组件命名同步到前端组件，例如 `QuestionCard`、`ImportPreviewTable`、`InterviewPanel`。
+- 第一版优先实现桌面端体验，移动端保证可用但不做深度优化。
+
+### 9.2 数据存储
 
 第一版使用 PostgreSQL 作为主数据库，Redis 用于缓存 token、导入任务状态、AI 抽题上下文缓存和限流计数。
 
@@ -553,7 +584,7 @@ updated_at
 
 仓库提供 `.env.example` 作为配置模板。
 
-### 9.2 大模型配置
+### 9.3 大模型配置
 
 第一版主要使用模型：
 
