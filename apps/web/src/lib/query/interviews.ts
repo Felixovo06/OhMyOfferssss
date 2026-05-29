@@ -97,6 +97,17 @@ export function useNextQuestion() {
   })
 }
 
+export function usePrefetchNextQuestion() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (sessionId: string) => nextQuestion(sessionId, { prefetch: true }),
+    onSuccess: (_data, sessionId) => {
+      queryClient.invalidateQueries({ queryKey: ["interviews", sessionId] })
+    },
+  })
+}
+
 export function useSummary(sessionId: string | null) {
   return useQuery({
     queryKey: ["interviews", sessionId, "summary"],

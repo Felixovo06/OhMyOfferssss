@@ -20,3 +20,8 @@ export function uploadResume(file: File) {
   form.append("file", file)
   return api.post<Resume>("/api/v1/resumes", form)
 }
+
+export function deleteResume(id: string) {
+  if (USE_MOCK) return mockResumeApi.deleteResume(id)
+  return api.delete<{ deleted: boolean }>(`/api/v1/resumes/${id}`)
+}

@@ -41,6 +41,16 @@ def get_resume(
     return ApiResponse(data=resume_to_out(resume))
 
 
+@router.delete("/resumes/{resume_id}", response_model=ApiResponse[dict[str, bool]])
+def delete_resume(
+    resume_id: str,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> ApiResponse[dict[str, bool]]:
+    ResumeService(db).delete_resume(current_user, resume_id)
+    return ApiResponse(data={"deleted": True})
+
+
 def resume_to_out(resume: Resume) -> ResumeOut:
     return ResumeOut.model_validate(
         {
@@ -52,4 +62,3 @@ def resume_to_out(resume: Resume) -> ResumeOut:
             ),
         },
     )
-

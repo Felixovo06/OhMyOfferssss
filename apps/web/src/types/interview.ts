@@ -50,6 +50,10 @@ export interface QuestionFeedback {
   missing_points: string[]
   reference_answer: string
   follow_up?: string
+  comment?: string
+  next_action?: string
+  next_stage?: string | null
+  decision_reason?: string | null
 }
 
 export interface ProjectPerformance {

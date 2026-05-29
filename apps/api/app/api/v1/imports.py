@@ -179,4 +179,4 @@ def batch_to_out(batch) -> ImportBatchOut:  # type: ignore[no-untyped-def]
 
 
 def _batch_status_for_frontend(batch) -> str:  # type: ignore[no-untyped-def]
-    return batch.status
+    return str(batch.status)

@@ -1,3 +1,5 @@
+from typing import Any
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
@@ -52,7 +54,7 @@ class InterviewRepository:
         target: str | None,
         resume_id: str | None,
         mode: str,
-        config_json: dict,
+        config_json: dict[str, Any],
         strategy: str,
         selection_reason: str,
     ) -> InterviewSession:
@@ -77,12 +79,21 @@ class InterviewRepository:
         question_id: str,
         position: int,
         selection_reason: str,
+        *,
+        stage: str = "knowledge",
+        intent: str = "知识点考察",
+        related_project: str | None = None,
+        related_skill: str | None = None,
     ) -> InterviewItem:
         item = InterviewItem(
             session_id=session_id,
             question_id=question_id,
             position=position,
             selection_reason=selection_reason,
+            stage=stage,
+            intent=intent,
+            related_project=related_project,
+            related_skill=related_skill,
         )
         self.db.add(item)
         self.db.flush()

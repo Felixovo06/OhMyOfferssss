@@ -1,3 +1,5 @@
+from typing import Any
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
@@ -19,9 +21,9 @@ class ImportRepository:
         bank_id: str,
         source_id: str,
         created_by_id: str,
-        raw_blocks_json: dict,
+        raw_blocks_json: dict[str, Any],
         normalized_text: str,
-        ai_result_json: dict,
+        ai_result_json: dict[str, Any],
         status: str,
     ) -> ImportBatch:
         batch = ImportBatch(

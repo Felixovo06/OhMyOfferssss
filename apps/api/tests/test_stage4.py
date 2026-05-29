@@ -88,3 +88,55 @@ def test_scanned_pdf_gets_clear_resume_error(client: TestClient) -> None:
     assert resume["status"] == "failed"
     assert resume["is_scanned"] is True
     assert "扫描件" in resume["error_message"]
+
+
+def test_delete_resume_unlinks_existing_interviews(client: TestClient) -> None:
+    token = login(client, "delete-resume-owner@example.com")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    upload_response = client.post(
+        "/api/v1/resumes",
+        files={
+            "file": (
+                "resume.txt",
+                b"Li Si\nlisi@example.com\nSkills: Java Redis\nProject: Redis backend",
+                "text/plain",
+            ),
+        },
+        headers=headers,
+    )
+    assert upload_response.status_code == 200
+    resume = upload_response.json()["data"]
+
+    bank_response = client.post("/api/v1/banks", json={"name": "删除简历测试题库"}, headers=headers)
+    bank_id = bank_response.json()["data"]["id"]
+    question_response = client.post(
+        f"/api/v1/banks/{bank_id}/questions",
+        json={"content": "请说明 Redis 缓存穿透", "answer": "布隆过滤器、空值缓存。"},
+        headers=headers,
+    )
+    assert question_response.status_code == 200
+
+    interview_response = client.post(
+        "/api/v1/interviews",
+        json={
+            "bank_ids": [bank_id],
+            "question_count": 1,
+            "mode": "custom",
+            "resume_id": resume["id"],
+        },
+        headers=headers,
+    )
+    assert interview_response.status_code == 200
+    interview_id = interview_response.json()["data"]["id"]
+
+    delete_response = client.delete(f"/api/v1/resumes/{resume['id']}", headers=headers)
+    assert delete_response.status_code == 200
+    assert delete_response.json()["data"]["deleted"] is True
+
+    detail_response = client.get(f"/api/v1/resumes/{resume['id']}", headers=headers)
+    assert detail_response.status_code == 404
+
+    interview_detail = client.get(f"/api/v1/interviews/{interview_id}", headers=headers)
+    assert interview_detail.status_code == 200
+    assert interview_detail.json()["data"]["resume_id"] is None

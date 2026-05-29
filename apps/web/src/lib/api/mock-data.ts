@@ -648,4 +648,11 @@ export const mockResumeApi = {
 
     return resume
   },
+  deleteResume: async (id: string) => {
+    await delay()
+    const index = mockResumes.findIndex((resume) => resume.id === id)
+    if (index < 0) throw new Error("简历不存在")
+    mockResumes.splice(index, 1)
+    return { deleted: true }
+  },
 }

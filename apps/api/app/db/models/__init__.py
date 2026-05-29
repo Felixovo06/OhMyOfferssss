@@ -1,5 +1,6 @@
 import uuid
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import (
     JSON,
@@ -132,7 +133,7 @@ class QuestionBank(Base, TimestampMixin):
     target_roles: Mapped[list[str]] = mapped_column(JSON, default=list)
     skill_keywords: Mapped[list[str]] = mapped_column(JSON, default=list)
     domains: Mapped[list[str]] = mapped_column(JSON, default=list)
-    semantic_profile_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    semantic_profile_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
 
     questions: Mapped[list["Question"]] = relationship(
         back_populates="bank",
@@ -219,9 +220,9 @@ class ImportBatch(Base, TimestampMixin):
     bank_id: Mapped[str] = mapped_column(ForeignKey("question_banks.id"), nullable=False)
     source_id: Mapped[str] = mapped_column(ForeignKey("feishu_sources.id"), nullable=False)
     created_by_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False)
-    raw_blocks_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    raw_blocks_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     normalized_text: Mapped[str] = mapped_column(Text, nullable=False, default="")
-    ai_result_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    ai_result_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     status: Mapped[str] = mapped_column(String(30), nullable=False, default="pending")
     error_message: Mapped[str | None] = mapped_column(Text)
 
@@ -264,11 +265,11 @@ class InterviewSession(Base, TimestampMixin):
     title: Mapped[str] = mapped_column(String(160), nullable=False)
     mode: Mapped[str] = mapped_column(String(30), nullable=False, default="normal")
     target: Mapped[str | None] = mapped_column(String(300))
-    config_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    config_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     strategy: Mapped[str] = mapped_column(Text, nullable=False, default="")
     selection_reason: Mapped[str] = mapped_column(Text, nullable=False, default="")
     status: Mapped[str] = mapped_column(String(30), nullable=False, default="ready")
-    summary_json: Mapped[dict | None] = mapped_column(JSON)
+    summary_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     items: Mapped[list["InterviewItem"]] = relationship(
@@ -297,7 +298,7 @@ class InterviewItem(Base, TimestampMixin):
     related_skill: Mapped[str | None] = mapped_column(String(120))
     status: Mapped[str] = mapped_column(String(30), nullable=False, default="pending")
     answer: Mapped[str | None] = mapped_column(Text)
-    feedback_json: Mapped[dict | None] = mapped_column(JSON)
+    feedback_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     answered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     session: Mapped[InterviewSession] = relationship(back_populates="items")
@@ -316,4 +317,4 @@ class Resume(Base, TimestampMixin):
     status: Mapped[str] = mapped_column(String(30), nullable=False, default="parsing")
     is_scanned: Mapped[bool | None] = mapped_column(Boolean)
     error_message: Mapped[str | None] = mapped_column(Text)
-    summary_json: Mapped[dict | None] = mapped_column(JSON)
+    summary_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)

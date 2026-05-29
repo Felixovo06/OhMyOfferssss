@@ -1,15 +1,15 @@
 "use client"
 
 import { useParams, useRouter } from "next/navigation"
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import {
   useSession,
   useStartSession,
   useSubmitAnswer,
   useUpdateQuestionDifficulty,
   useNextQuestion,
+  usePrefetchNextQuestion,
 } from "@/lib/query/interviews"
-import { useResume } from "@/lib/query/resumes"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
@@ -25,15 +25,15 @@ import {
 import {
   Loader2,
   AlertCircle,
-  Sparkles,
   CheckCircle,
   ArrowRight,
-  BrainCircuit,
   MessageSquare,
   Trophy,
   Lightbulb,
-  Target,
-  FileText,
+  Eye,
+  Keyboard,
+  Mic,
+  Square,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -83,16 +83,43 @@ export default function InterviewPage() {
   const sessionId = params.id as string
 
   const { data, isLoading, error } = useSession(sessionId)
-  const resumeId = data?.session.resume_id ?? null
-  const { data: resume } = useResume(resumeId)
   const startSession = useStartSession()
   const submitAnswer = useSubmitAnswer()
   const updateDifficulty = useUpdateQuestionDifficulty()
   const nextQuestion = useNextQuestion()
+  const prefetchNextQuestion = usePrefetchNextQuestion()
 
   const [answer, setAnswer] = useState("")
   const [difficulty, setDifficulty] = useState<string>("unchanged")
   const [showFeedback, setShowFeedback] = useState(false)
+  const [answerMode, setAnswerMode] = useState<"read" | "type" | "voice">("read")
+  const [isRecognizing, setIsRecognizing] = useState(false)
+  const recognitionRef = useRef<{
+    start: () => void
+    stop: () => void
+    continuous: boolean
+    interimResults: boolean
+    lang: string
+    onresult: ((event: { results: ArrayLike<{ 0: { transcript: string }; isFinal: boolean }> }) => void) | null
+    onend: (() => void) | null
+    onerror: (() => void) | null
+  } | null>(null)
+  const autoStartRef = useRef(false)
+
+  useEffect(() => {
+    if (!data || data.session.status !== "pending" || autoStartRef.current) return
+    autoStartRef.current = true
+    startSession.mutate(sessionId)
+  }, [data, sessionId, startSession])
+
+  useEffect(() => {
+    if (!data || data.session.status !== "in_progress") return
+    const pendingCount = data.questions.filter((question) => question.status === "pending").length
+    const canPrefetch = data.questions.length < data.session.total_questions
+    if (pendingCount === 1 && canPrefetch && !prefetchNextQuestion.isPending) {
+      prefetchNextQuestion.mutate(sessionId)
+    }
+  }, [data, prefetchNextQuestion, sessionId])
 
   if (isLoading) {
     return (
@@ -128,125 +155,19 @@ export default function InterviewPage() {
   const { session, questions } = data
   const currentQuestion = questions?.[session.current_index]
 
-  // --- Review State ---
+  // --- Preparing first question ---
   if (session.status === "pending") {
     return (
-      <div className="mx-auto max-w-3xl space-y-6 p-6">
+      <div className="mx-auto flex max-w-2xl flex-col items-center gap-4 p-6 py-24 text-center">
+        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+          <Loader2 className="h-6 w-6 animate-spin text-primary" />
+        </div>
         <div>
-          <div className="flex items-center gap-3">
-            <BrainCircuit className="h-6 w-6 text-primary" />
-            <h1 className="text-2xl font-semibold tracking-tight">AI 抽题结果</h1>
-            {session.flow_mode && (
-              <Badge variant="secondary" className="text-[10px]">
-                {session.flow_mode === "project" ? "项目优先" : "知识优先"}
-              </Badge>
-            )}
-          </div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            AI 已根据你的配置从题库中选出 {session.total_questions} 道题
+          <h1 className="text-xl font-semibold tracking-tight">正在准备第一题</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            面试开始后只加载当前题，后续会根据上一题表现继续追问。
           </p>
         </div>
-
-        {session.goal && (
-          <Card className="bg-muted/30">
-            <CardContent className="flex items-start gap-3 p-4">
-              <Target className="mt-0.5 h-4 w-4 text-primary" />
-              <div>
-                <p className="text-xs font-medium text-muted-foreground">面试目标</p>
-                <p className="mt-0.5 text-sm">{session.goal}</p>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Resume context in review */}
-        {resume?.status === "completed" && resume.summary && (
-          <Card className="border-primary/30 bg-primary/[0.03]">
-            <CardContent className="flex items-start gap-3 p-4">
-              <FileText className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-              <div className="min-w-0 flex-1">
-                <p className="text-xs font-medium text-muted-foreground">简历上下文</p>
-                <p className="mt-0.5 text-sm">{resume.summary.name} · {resume.summary.skills.slice(0, 5).join("、")}</p>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        <div className="space-y-4">
-          {questions?.map((q, i) => (
-            <Card key={q.id} className="border-l-4" style={{ borderLeftColor: "hsl(var(--primary))" }}>
-              <CardContent className="p-4">
-                <div className="flex items-start gap-3">
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-medium text-primary">
-                    {i + 1}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium">{q.content}</p>
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${difficultyColor(q.difficulty)}`}>
-                        {difficultyLabel(q.difficulty)}
-                      </span>
-                      {q.tags.map((tag) => (
-                        <Badge key={tag} variant="outline" className="text-[10px]">
-                          {tag}
-                        </Badge>
-                      ))}
-                    </div>
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                      {q.related_project && (
-                        <span className="text-[10px] text-muted-foreground">
-                          项目：{q.related_project}
-                        </span>
-                      )}
-                      {q.stage && (
-                        <Badge variant="outline" className="text-[10px] text-muted-foreground">
-                          {q.stage}
-                        </Badge>
-                      )}
-                    </div>
-                    {q.ai_reason && (
-                      <details className="mt-2">
-                        <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
-                          <Lightbulb className="mr-1 inline h-3 w-3" />
-                          AI 选本题理由
-                        </summary>
-                        <p className="mt-1 text-xs text-muted-foreground">{q.ai_reason}</p>
-                      </details>
-                    )}
-                    {q.intention && (
-                      <p className="mt-1 text-[10px] text-muted-foreground">
-                        考察意图：{q.intention}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-
-        <Button
-          className="w-full"
-          size="lg"
-          onClick={() =>
-            startSession.mutate(sessionId, {
-              onSuccess: () => toast.success("面试开始"),
-            })
-          }
-          disabled={startSession.isPending}
-        >
-          {startSession.isPending ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              准备中...
-            </>
-          ) : (
-            <>
-              <Sparkles className="mr-2 h-4 w-4" />
-              开始面试
-            </>
-          )}
-        </Button>
       </div>
     )
   }
@@ -279,19 +200,26 @@ export default function InterviewPage() {
 
   const feedback = currentQuestion.feedback
   const isLast = session.current_index >= session.total_questions - 1
+  const latestAnswered = [...questions].reverse().find((question) => question.feedback)
 
-  function handleSubmit() {
-    if (!answer.trim()) {
+  function handleProceed() {
+    const finalAnswer =
+      answerMode === "read"
+        ? "看题模式：用户选择只看题，未提交口述或文字回答。"
+        : answer.trim()
+    if (!finalAnswer.trim()) {
       toast.error("请输入你的回答")
       return
     }
     setShowFeedback(false)
     const difficultyValue = difficulty === "unchanged" ? undefined : parseDifficulty(difficulty)
     submitAnswer.mutate(
-      { sessionId, questionId: currentQuestion.id, answer, difficulty: difficultyValue },
+      { sessionId, questionId: currentQuestion.id, answer: finalAnswer, difficulty: difficultyValue },
       {
         onSuccess: () => {
-          setShowFeedback(true)
+          setAnswer("")
+          setDifficulty("unchanged")
+          nextQuestion.mutate(sessionId)
         },
       },
     )
@@ -315,6 +243,43 @@ export default function InterviewPage() {
     setDifficulty("unchanged")
     setShowFeedback(false)
     nextQuestion.mutate(sessionId)
+  }
+
+  function toggleSpeechRecognition() {
+    const SpeechRecognition =
+      (window as typeof window & {
+        SpeechRecognition?: new () => NonNullable<typeof recognitionRef.current>
+        webkitSpeechRecognition?: new () => NonNullable<typeof recognitionRef.current>
+      }).SpeechRecognition ??
+      (window as typeof window & {
+        webkitSpeechRecognition?: new () => NonNullable<typeof recognitionRef.current>
+      }).webkitSpeechRecognition
+    if (!SpeechRecognition) {
+      toast.error("当前浏览器不支持语音转文字")
+      return
+    }
+    if (isRecognizing) {
+      recognitionRef.current?.stop()
+      setIsRecognizing(false)
+      return
+    }
+    const recognition = new SpeechRecognition()
+    recognition.lang = "zh-CN"
+    recognition.continuous = true
+    recognition.interimResults = true
+    recognition.onresult = (event) => {
+      let transcript = ""
+      for (let index = 0; index < event.results.length; index += 1) {
+        transcript += event.results[index][0].transcript
+      }
+      setAnswer(transcript)
+    }
+    recognition.onend = () => setIsRecognizing(false)
+    recognition.onerror = () => setIsRecognizing(false)
+    recognitionRef.current = recognition
+    setAnswerMode("voice")
+    setIsRecognizing(true)
+    recognition.start()
   }
 
   function parseDifficulty(value: string) {
@@ -399,6 +364,48 @@ export default function InterviewPage() {
       {/* Answer Input */}
       {!showFeedback && currentQuestion.status === "pending" && (
         <div className="space-y-3">
+          {latestAnswered?.feedback && latestAnswered.id !== currentQuestion.id && (
+            <div className="rounded-lg border bg-muted/30 p-3">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-xs font-medium text-muted-foreground">上一题快速评判</p>
+                <Badge variant="secondary" className="text-[10px]">
+                  {latestAnswered.feedback.score} 分
+                </Badge>
+              </div>
+              <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+                {latestAnswered.feedback.comment || latestAnswered.feedback.decision_reason || "已完成快速评判"}
+              </p>
+            </div>
+          )}
+          <div className="grid grid-cols-3 gap-2">
+            <Button
+              type="button"
+              variant={answerMode === "read" ? "default" : "outline"}
+              onClick={() => setAnswerMode("read")}
+            >
+              <Eye className="mr-1 h-4 w-4" />
+              只看题
+            </Button>
+            <Button
+              type="button"
+              variant={answerMode === "type" ? "default" : "outline"}
+              onClick={() => setAnswerMode("type")}
+            >
+              <Keyboard className="mr-1 h-4 w-4" />
+              打字
+            </Button>
+            <Button
+              type="button"
+              variant={answerMode === "voice" ? "default" : "outline"}
+              onClick={() => {
+                setAnswerMode("voice")
+                toggleSpeechRecognition()
+              }}
+            >
+              {isRecognizing ? <Square className="mr-1 h-4 w-4" /> : <Mic className="mr-1 h-4 w-4" />}
+              语音
+            </Button>
+          </div>
           <div className="flex items-end gap-2">
             <div className="flex-1">
               <label className="text-sm font-medium">题目难度</label>
@@ -427,21 +434,31 @@ export default function InterviewPage() {
               {updateDifficulty.isPending ? "保存中..." : "保存难度"}
             </Button>
           </div>
-          <label className="text-sm font-medium">你的回答</label>
-          <Textarea
-            placeholder="在此输入你的回答..."
-            className="min-h-[120px]"
-            value={answer}
-            onChange={(e) => setAnswer(e.target.value)}
-          />
-          <Button onClick={handleSubmit} disabled={submitAnswer.isPending} className="w-full">
-            {submitAnswer.isPending ? (
+          {answerMode !== "read" && (
+            <>
+              <label className="text-sm font-medium">
+                {answerMode === "voice" ? "语音转文字结果" : "你的回答"}
+              </label>
+              <Textarea
+                placeholder={answerMode === "voice" ? "点击语音按钮后开始说话..." : "在此输入你的回答..."}
+                className="min-h-[120px]"
+                value={answer}
+                onChange={(e) => setAnswer(e.target.value)}
+              />
+            </>
+          )}
+          <Button
+            onClick={handleProceed}
+            disabled={submitAnswer.isPending || nextQuestion.isPending}
+            className="w-full"
+          >
+            {submitAnswer.isPending || nextQuestion.isPending ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                AI 正在评分...
+                AI 正在快速评判并准备下一题...
               </>
             ) : (
-              "提交回答"
+              isLast ? "完成并查看总结" : "下一题"
             )}
           </Button>
         </div>

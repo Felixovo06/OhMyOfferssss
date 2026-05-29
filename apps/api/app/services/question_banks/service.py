@@ -38,9 +38,9 @@ class QuestionBankService:
             payload.description,
             payload.group_id,
             compact_strings(payload.default_tags),
-            compact_strings(payload.target_roles),
+            compact_strings([*payload.target_roles, *payload.target_positions]),
             compact_strings(payload.skill_keywords),
-            compact_strings(payload.domains),
+            compact_strings([*payload.domains, *payload.domain_tags]),
             payload.semantic_profile,
         )
         self.db.commit()
@@ -63,10 +63,14 @@ class QuestionBankService:
             bank.default_tags = compact_strings(payload.default_tags)
         if payload.target_roles is not None:
             bank.target_roles = compact_strings(payload.target_roles)
+        if payload.target_positions is not None:
+            bank.target_roles = compact_strings(payload.target_positions)
         if payload.skill_keywords is not None:
             bank.skill_keywords = compact_strings(payload.skill_keywords)
         if payload.domains is not None:
             bank.domains = compact_strings(payload.domains)
+        if payload.domain_tags is not None:
+            bank.domains = compact_strings(payload.domain_tags)
         if payload.semantic_profile is not None:
             bank.semantic_profile_json = payload.semantic_profile
         self.db.commit()

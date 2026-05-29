@@ -16,6 +16,8 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
         token = request_id_context.set(request_id)
         try:
             response = await call_next(request)
+            if not isinstance(response, Response):
+                raise TypeError("call_next must return a Starlette Response")
             response.headers[REQUEST_ID_HEADER] = request_id
             return response
         finally:

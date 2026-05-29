@@ -1,3 +1,5 @@
+from typing import Any
+
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, selectinload
 
@@ -41,7 +43,7 @@ class QuestionBankRepository:
         target_roles: list[str],
         skill_keywords: list[str],
         domains: list[str],
-        semantic_profile: dict,
+        semantic_profile: dict[str, Any],
     ) -> QuestionBank:
         bank = QuestionBank(
             name=name,

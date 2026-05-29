@@ -1,12 +1,14 @@
 "use client"
 
+import type { MouseEvent } from "react"
 import { useRouter } from "next/navigation"
-import { useResumes } from "@/lib/query/resumes"
+import { useDeleteResume, useResumes } from "@/lib/query/resumes"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import { FileText, Upload, Loader2, CheckCircle, AlertCircle, Clock, ArrowRight } from "lucide-react"
+import { FileText, Upload, Loader2, CheckCircle, AlertCircle, Clock, ArrowRight, Trash2 } from "lucide-react"
+import { toast } from "sonner"
 
 const statusConfig: Record<string, { label: string; icon: typeof Clock; color: string }> = {
   uploading: { label: "上传中", icon: Clock, color: "text-muted-foreground" },
@@ -18,6 +20,17 @@ const statusConfig: Record<string, { label: string; icon: typeof Clock; color: s
 export default function ResumesPage() {
   const router = useRouter()
   const { data: resumes, isLoading, error, refetch } = useResumes()
+  const deleteResume = useDeleteResume()
+
+  function handleDeleteResume(event: MouseEvent, resumeId: string) {
+    event.stopPropagation()
+    if (!window.confirm("确定删除这份简历吗？历史面试记录会保留，但不再关联该简历。")) {
+      return
+    }
+    deleteResume.mutate(resumeId, {
+      onSuccess: () => toast.success("简历已删除"),
+    })
+  }
 
   return (
     <div className="space-y-6 p-6">
@@ -81,6 +94,15 @@ export default function ResumesPage() {
                   <Icon className={`mr-1 h-3 w-3 ${resume.status === "parsing" ? "animate-spin" : ""}`} />
                   {config.label}
                 </Badge>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="删除简历"
+                  onClick={(event) => handleDeleteResume(event, resume.id)}
+                  disabled={deleteResume.isPending}
+                >
+                  <Trash2 className="h-4 w-4 text-muted-foreground" />
+                </Button>
                 <ArrowRight className="h-4 w-4 text-muted-foreground" />
               </div>
             )

@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { getResumes, getResume, uploadResume } from "@/lib/api/resumes"
+import { deleteResume, getResumes, getResume, uploadResume } from "@/lib/api/resumes"
 import { toast } from "sonner"
 
 export function useResumes() {
@@ -32,6 +32,21 @@ export function useUploadResume() {
     },
     onError: (err) => {
       toast.error(err.message || "上传失败")
+    },
+  })
+}
+
+export function useDeleteResume() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (resumeId: string) => deleteResume(resumeId),
+    onSuccess: (_data, resumeId) => {
+      queryClient.invalidateQueries({ queryKey: ["resumes"] })
+      queryClient.removeQueries({ queryKey: ["resumes", resumeId] })
+    },
+    onError: (err) => {
+      toast.error(err.message || "删除失败")
     },
   })
 }

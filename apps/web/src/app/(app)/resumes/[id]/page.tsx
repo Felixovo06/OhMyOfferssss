@@ -1,7 +1,7 @@
 "use client"
 
 import { useParams, useRouter } from "next/navigation"
-import { useResume } from "@/lib/query/resumes"
+import { useDeleteResume, useResume } from "@/lib/query/resumes"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
@@ -20,7 +20,9 @@ import {
   Mail,
   Phone,
   Scan,
+  Trash2,
 } from "lucide-react"
+import { toast } from "sonner"
 
 export default function ResumeDetailPage() {
   const params = useParams()
@@ -28,6 +30,19 @@ export default function ResumeDetailPage() {
   const resumeId = params.id as string
 
   const { data: resume, isLoading } = useResume(resumeId)
+  const deleteResume = useDeleteResume()
+
+  function handleDeleteResume() {
+    if (!window.confirm("确定删除这份简历吗？历史面试记录会保留，但不再关联该简历。")) {
+      return
+    }
+    deleteResume.mutate(resumeId, {
+      onSuccess: () => {
+        toast.success("简历已删除")
+        router.push("/resumes")
+      },
+    })
+  }
 
   if (isLoading) {
     return (
@@ -67,12 +82,26 @@ export default function ResumeDetailPage() {
             </p>
           </div>
         </div>
-        {resume.status === "completed" && resume.summary && (
-          <Button onClick={() => router.push(`/interviews/new?resume_id=${resume.id}`)}>
-            <Sparkles className="mr-1 h-4 w-4" />
-            基于此简历面试
+        <div className="flex items-center gap-2">
+          {resume.status === "completed" && resume.summary && (
+            <Button onClick={() => router.push(`/interviews/new?resume_id=${resume.id}`)}>
+              <Sparkles className="mr-1 h-4 w-4" />
+              基于此简历面试
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            onClick={handleDeleteResume}
+            disabled={deleteResume.isPending}
+          >
+            {deleteResume.isPending ? (
+              <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+            ) : (
+              <Trash2 className="mr-1 h-4 w-4" />
+            )}
+            删除
           </Button>
-        )}
+        </div>
       </div>
 
       {/* Scanning notice */}

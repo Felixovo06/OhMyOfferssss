@@ -606,7 +606,7 @@ def normalize_feishu_blocks(raw_blocks: dict[str, Any]) -> str:
 
 def extract_block_text(block: dict[str, Any]) -> str:
     if isinstance(block.get("text"), str):
-        return block["text"]
+        return str(block["text"])
     for key in (
         "text",
         "heading1",

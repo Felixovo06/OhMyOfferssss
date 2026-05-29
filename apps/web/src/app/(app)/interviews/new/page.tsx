@@ -27,8 +27,13 @@ import {
   BookOpen,
   FileText,
   AlertCircle,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react"
 import { toast } from "sonner"
+
+const BANKS_PER_PAGE = 6
 
 const difficultyLabels: Record<number, string> = {
   1: "简单",
@@ -49,6 +54,8 @@ export default function NewInterviewPage() {
 
   const [selectedBankIds, setSelectedBankIds] = useState<string[]>([])
   const [bankSelectionTouched, setBankSelectionTouched] = useState(false)
+  const [bankPickerOpen, setBankPickerOpen] = useState(false)
+  const [bankPage, setBankPage] = useState(0)
   const [mode, setMode] = useState<"normal" | "custom">(resumeId ? "custom" : "normal")
   const [selectedResumeId, setSelectedResumeId] = useState<string>(resumeId || "")
   const [selectedTags, setSelectedTags] = useState<string>("")
@@ -61,6 +68,14 @@ export default function NewInterviewPage() {
   const activeBankIds = bankSelectionTouched
     ? selectedBankIds
     : banks?.map((bank) => bank.id) ?? []
+  const bankCount = banks?.length ?? 0
+  const totalBankPages = Math.max(1, Math.ceil(bankCount / BANKS_PER_PAGE))
+  const safeBankPage = Math.min(bankPage, totalBankPages - 1)
+  const visibleBanks = banks?.slice(
+    safeBankPage * BANKS_PER_PAGE,
+    safeBankPage * BANKS_PER_PAGE + BANKS_PER_PAGE,
+  )
+  const selectedBanks = banks?.filter((bank) => activeBankIds.includes(bank.id)) ?? []
 
   function toggleBank(bankId: string) {
     setBankSelectionTouched(true)
@@ -87,7 +102,7 @@ export default function NewInterviewPage() {
 
     createSession.mutate(
       {
-        bank_ids: activeBankIds,
+        bank_ids: bankSelectionTouched ? activeBankIds : [],
         tags: selectedTags
           ? selectedTags.split(/[,，\s]+/).filter(Boolean)
           : undefined,
@@ -301,7 +316,31 @@ export default function NewInterviewPage() {
 
       {/* Select Banks */}
       <section className="space-y-3">
-        <h2 className="text-sm font-medium">选择题库</h2>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-medium">选择题库</h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {bankCount > 0
+                ? `已选择 ${activeBankIds.length}/${bankCount} 个题库`
+                : "选择用于抽题的题库范围"}
+            </p>
+          </div>
+          {banks && banks.length > 0 && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setBankPickerOpen((open) => !open)}
+            >
+              {bankPickerOpen ? "收起" : "展开选择"}
+              <ChevronDown
+                className={`ml-1 h-4 w-4 transition-transform ${
+                  bankPickerOpen ? "rotate-180" : ""
+                }`}
+              />
+            </Button>
+          )}
+        </div>
         {banksLoading ? (
           <div className="grid gap-2 sm:grid-cols-2">
             {[1, 2].map((i) => (
@@ -321,47 +360,130 @@ export default function NewInterviewPage() {
             <Button size="sm" variant="outline" onClick={() => refetchBanks()}>重试</Button>
           </div>
         ) : banks && banks.length > 0 ? (
-          <div className="grid gap-2 sm:grid-cols-2">
-            {banks.map((bank) => {
-              const selected = activeBankIds.includes(bank.id)
-              return (
-                <button
-                  key={bank.id}
-                  type="button"
-                  onClick={() => toggleBank(bank.id)}
-                  className={`flex items-start gap-3 rounded-lg border p-3 text-left transition-all ${
-                    selected
-                      ? "border-primary bg-primary/5"
-                      : "hover:bg-accent/50 hover:border-foreground/20"
-                  }`}
-                >
-                  <div
-                    className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border ${
-                      selected ? "border-primary bg-primary text-primary-foreground" : ""
-                    }`}
-                  >
-                    {selected && <Check className="h-3 w-3" />}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium">{bank.name}</p>
-                    {bank.description && (
-                      <p className="text-xs text-muted-foreground line-clamp-1">{bank.description}</p>
-                    )}
-                    <p className="mt-0.5 flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                      {bank.question_count} 题
-                      {bank.target_positions && bank.target_positions.length > 0 && (
-                        <span>· 适配 {bank.target_positions.slice(0, 2).join("、")}</span>
-                      )}
-                    </p>
-                  </div>
-                  {bank.target_positions && bank.target_positions.some((p) => goal.toLowerCase().includes(p.toLowerCase())) && (
-                    <Badge variant="secondary" className="shrink-0 text-[10px] text-primary">
-                      推荐
+          <div className="space-y-3">
+            {!bankPickerOpen ? (
+              <div className="rounded-lg border bg-muted/20 p-3">
+                <div className="flex flex-wrap gap-1.5">
+                  {selectedBanks.slice(0, 5).map((bank) => (
+                    <Badge key={bank.id} variant="secondary" className="max-w-full text-[10px]">
+                      <span className="truncate">{bank.name}</span>
+                    </Badge>
+                  ))}
+                  {selectedBanks.length > 5 && (
+                    <Badge variant="outline" className="text-[10px]">
+                      +{selectedBanks.length - 5}
                     </Badge>
                   )}
-                </button>
-              )
-            })}
+                </div>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  默认使用全部题库；需要精确控制时展开选择。
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-muted/20 p-2">
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setBankSelectionTouched(true)
+                        setSelectedBankIds(banks.map((bank) => bank.id))
+                      }}
+                    >
+                      全选
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setBankSelectionTouched(true)
+                        setSelectedBankIds([])
+                      }}
+                    >
+                      清空
+                    </Button>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8"
+                      disabled={safeBankPage === 0}
+                      onClick={() => setBankPage((page) => Math.max(0, page - 1))}
+                      aria-label="上一页题库"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <span className="min-w-14 text-center text-xs text-muted-foreground">
+                      {safeBankPage + 1}/{totalBankPages}
+                    </span>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8"
+                      disabled={safeBankPage >= totalBankPages - 1}
+                      onClick={() => setBankPage((page) => Math.min(totalBankPages - 1, page + 1))}
+                      aria-label="下一页题库"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {visibleBanks?.map((bank) => {
+                    const selected = activeBankIds.includes(bank.id)
+                    return (
+                      <button
+                        key={bank.id}
+                        type="button"
+                        onClick={() => toggleBank(bank.id)}
+                        className={`flex min-h-20 items-start gap-3 rounded-lg border p-3 text-left transition-all ${
+                          selected
+                            ? "border-primary bg-primary/5"
+                            : "hover:border-foreground/20 hover:bg-accent/50"
+                        }`}
+                      >
+                        <div
+                          className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border ${
+                            selected ? "border-primary bg-primary text-primary-foreground" : ""
+                          }`}
+                        >
+                          {selected && <Check className="h-3 w-3" />}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium">{bank.name}</p>
+                          {bank.description && (
+                            <p className="line-clamp-1 text-xs text-muted-foreground">
+                              {bank.description}
+                            </p>
+                          )}
+                          <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
+                            <span>{bank.question_count} 题</span>
+                            {bank.target_positions && bank.target_positions.length > 0 && (
+                              <span>适配 {bank.target_positions.slice(0, 2).join("、")}</span>
+                            )}
+                          </p>
+                        </div>
+                        {bank.target_positions &&
+                          bank.target_positions.some((p) =>
+                            goal.toLowerCase().includes(p.toLowerCase()),
+                          ) && (
+                            <Badge variant="secondary" className="shrink-0 text-[10px] text-primary">
+                              推荐
+                            </Badge>
+                          )}
+                      </button>
+                    )
+                  })}
+                </div>
+              </>
+            )}
           </div>
         ) : (
           <Card>
