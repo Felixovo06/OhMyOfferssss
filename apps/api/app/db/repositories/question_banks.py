@@ -38,15 +38,22 @@ class QuestionBankRepository:
         description: str | None,
         group_id: str | None,
         default_tags: list[str],
+        target_roles: list[str],
+        skill_keywords: list[str],
+        domains: list[str],
+        semantic_profile: dict,
     ) -> QuestionBank:
         bank = QuestionBank(
             name=name,
             description=description,
             group_id=group_id,
             default_tags=default_tags,
+            target_roles=target_roles,
+            skill_keywords=skill_keywords,
+            domains=domains,
+            semantic_profile_json=semantic_profile,
             created_by_id=user.id,
         )
         self.db.add(bank)
         self.db.flush()
         return bank
-

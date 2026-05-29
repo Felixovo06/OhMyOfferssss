@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import { Separator } from "@/components/ui/separator"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -42,6 +43,9 @@ const createBankSchema = z.object({
   name: z.string().min(1, "请输入题库名称").max(100, "名称不超过 100 个字符"),
   description: z.string().max(500, "描述不超过 500 个字符").optional(),
   group_id: z.string().optional(),
+  target_positions: z.string().optional(),
+  skill_keywords: z.string().optional(),
+  domain_tags: z.string().optional(),
 })
 
 type CreateBankForm = z.infer<typeof createBankSchema>
@@ -150,6 +154,49 @@ export default function BanksPage() {
                     </FormItem>
                   )}
                 />
+                  <Separator className="my-2" />
+                  <p className="text-xs font-medium text-muted-foreground">题库画像（可选）</p>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <FormField
+                      control={form.control}
+                      name="target_positions"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>适配岗位</FormLabel>
+                          <FormControl>
+                            <Input placeholder="前端工程师, Node.js 后端" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="skill_keywords"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>技能关键词</FormLabel>
+                          <FormControl>
+                            <Input placeholder="React, TypeScript, CSS" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                  <FormField
+                    control={form.control}
+                    name="domain_tags"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>领域标签</FormLabel>
+                        <FormControl>
+                          <Input placeholder="前端, 性能优化, 工程化" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                 <DialogFooter>
                   <Button type="submit" disabled={createBank.isPending}>
                     {createBank.isPending ? "创建中..." : "创建"}
@@ -218,6 +265,12 @@ export default function BanksPage() {
                     </Badge>
                   ))}
                 </div>
+                {bank.target_positions && bank.target_positions.length > 0 && (
+                  <div className="mt-2 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
+                    适配 {bank.target_positions.slice(0, 3).join("、")}
+                    {bank.target_positions.length > 3 && <span>等 {bank.target_positions.length} 个岗位</span>}
+                  </div>
+                )}
                 <p className="mt-2 text-xs text-muted-foreground">
                   创建于 {new Date(bank.created_at).toLocaleDateString("zh-CN")}
                 </p>

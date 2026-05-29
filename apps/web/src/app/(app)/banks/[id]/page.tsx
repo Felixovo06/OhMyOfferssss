@@ -265,6 +265,20 @@ export default function BankDetailPage() {
               ))}
             </div>
           )}
+          {bank.target_positions && bank.target_positions.length > 0 && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              适配岗位：{bank.target_positions.join("、")}
+            </p>
+          )}
+          {bank.skill_keywords && bank.skill_keywords.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1">
+              {bank.skill_keywords.map((s) => (
+                <Badge key={s} variant="outline" className="text-[10px] text-primary">
+                  {s}
+                </Badge>
+              ))}
+            </div>
+          )}
         </div>
         {isOwner && (
           <Button onClick={() => setCreateOpen(true)}>

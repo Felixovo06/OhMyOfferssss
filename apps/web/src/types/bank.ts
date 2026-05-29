@@ -6,6 +6,9 @@ export interface QuestionBank {
   group_id?: string
   question_count: number
   tags: string[]
+  target_positions?: string[]
+  skill_keywords?: string[]
+  domain_tags?: string[]
   created_at: string
   updated_at: string
 }
@@ -14,6 +17,9 @@ export interface CreateBankRequest {
   name: string
   description?: string
   group_id?: string
+  target_positions?: string[]
+  skill_keywords?: string[]
+  domain_tags?: string[]
 }
 
 export interface Question {

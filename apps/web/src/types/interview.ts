@@ -6,6 +6,7 @@ export interface InterviewConfig {
   goal?: string
   mode?: "normal" | "custom"
   resume_id?: string
+  flow_mode?: "project" | "knowledge"
 }
 
 export interface InterviewSession {
@@ -17,6 +18,7 @@ export interface InterviewSession {
   goal?: string
   mode?: "normal" | "custom"
   resume_id?: string
+  flow_mode?: "project" | "knowledge"
   status: "pending" | "in_progress" | "completed"
   current_index: number
   total_questions: number
@@ -37,6 +39,10 @@ export interface InterviewQuestion {
   score?: number
   answer?: string
   feedback?: QuestionFeedback
+  related_project?: string
+  related_skills?: string[]
+  intention?: string
+  stage?: string
 }
 
 export interface QuestionFeedback {
@@ -46,10 +52,31 @@ export interface QuestionFeedback {
   follow_up?: string
 }
 
+export interface ProjectPerformance {
+  project_name: string
+  score: number
+  comment: string
+}
+
+export interface KnowledgePerformance {
+  tag: string
+  mastery: number
+}
+
+export interface ReviewPlan {
+  topic: string
+  suggestion: string
+}
+
 export interface InterviewSummary {
   session: InterviewSession
   questions: InterviewQuestion[]
   overall_score: number
   weak_tags: string[]
   recommendations: string[]
+  project_performance?: ProjectPerformance[]
+  knowledge_performance?: KnowledgePerformance[]
+  strengths?: string[]
+  weaknesses?: string[]
+  review_plan?: ReviewPlan[]
 }

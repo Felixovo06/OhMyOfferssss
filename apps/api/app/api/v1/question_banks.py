@@ -129,6 +129,7 @@ def bank_to_out(bank) -> QuestionBankOut:  # type: ignore[no-untyped-def]
             **bank.__dict__,
             "owner_id": bank.created_by_id,
             "tags": bank.default_tags,
+            "semantic_profile": bank.semantic_profile_json,
             "scope": "group" if bank.group_id else "personal",
             "question_count": len(getattr(bank, "questions", [])),
         },

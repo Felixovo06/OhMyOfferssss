@@ -136,6 +136,11 @@ export default function InterviewPage() {
           <div className="flex items-center gap-3">
             <BrainCircuit className="h-6 w-6 text-primary" />
             <h1 className="text-2xl font-semibold tracking-tight">AI 抽题结果</h1>
+            {session.flow_mode && (
+              <Badge variant="secondary" className="text-[10px]">
+                {session.flow_mode === "project" ? "项目优先" : "知识优先"}
+              </Badge>
+            )}
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
             AI 已根据你的配置从题库中选出 {session.total_questions} 道题
@@ -187,6 +192,18 @@ export default function InterviewPage() {
                         </Badge>
                       ))}
                     </div>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      {q.related_project && (
+                        <span className="text-[10px] text-muted-foreground">
+                          项目：{q.related_project}
+                        </span>
+                      )}
+                      {q.stage && (
+                        <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                          {q.stage}
+                        </Badge>
+                      )}
+                    </div>
                     {q.ai_reason && (
                       <details className="mt-2">
                         <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
@@ -195,6 +212,11 @@ export default function InterviewPage() {
                         </summary>
                         <p className="mt-1 text-xs text-muted-foreground">{q.ai_reason}</p>
                       </details>
+                    )}
+                    {q.intention && (
+                      <p className="mt-1 text-[10px] text-muted-foreground">
+                        考察意图：{q.intention}
+                      </p>
                     )}
                   </div>
                 </div>
@@ -308,6 +330,25 @@ export default function InterviewPage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-6">
+      {/* Stage context */}
+      {currentQuestion.stage && (
+        <div className="flex items-center gap-2">
+          <Badge variant="secondary" className="text-[10px]">
+            {currentQuestion.stage}
+          </Badge>
+          {currentQuestion.related_project && (
+            <span className="text-xs text-muted-foreground">
+              关联项目：{currentQuestion.related_project}
+            </span>
+          )}
+          {currentQuestion.intention && (
+            <span className="text-xs text-muted-foreground">
+              考察意图：{currentQuestion.intention}
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Progress */}
       <div className="flex items-center gap-3">
         <div className="flex-1">

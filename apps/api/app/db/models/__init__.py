@@ -129,6 +129,10 @@ class QuestionBank(Base, TimestampMixin):
     group_id: Mapped[str | None] = mapped_column(ForeignKey("groups.id"), index=True)
     created_by_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False)
     default_tags: Mapped[list[str]] = mapped_column(JSON, default=list)
+    target_roles: Mapped[list[str]] = mapped_column(JSON, default=list)
+    skill_keywords: Mapped[list[str]] = mapped_column(JSON, default=list)
+    domains: Mapped[list[str]] = mapped_column(JSON, default=list)
+    semantic_profile_json: Mapped[dict] = mapped_column(JSON, default=dict)
 
     questions: Mapped[list["Question"]] = relationship(
         back_populates="bank",
@@ -287,6 +291,10 @@ class InterviewItem(Base, TimestampMixin):
     question_id: Mapped[str] = mapped_column(ForeignKey("questions.id"), index=True, nullable=False)
     position: Mapped[int] = mapped_column(Integer, nullable=False)
     selection_reason: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    stage: Mapped[str] = mapped_column(String(40), nullable=False, default="knowledge")
+    intent: Mapped[str] = mapped_column(String(120), nullable=False, default="知识点考察")
+    related_project: Mapped[str | None] = mapped_column(String(200))
+    related_skill: Mapped[str | None] = mapped_column(String(120))
     status: Mapped[str] = mapped_column(String(30), nullable=False, default="pending")
     answer: Mapped[str | None] = mapped_column(Text)
     feedback_json: Mapped[dict | None] = mapped_column(JSON)

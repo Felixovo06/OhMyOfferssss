@@ -37,7 +37,11 @@ class QuestionBankService:
             payload.name,
             payload.description,
             payload.group_id,
-            payload.default_tags,
+            compact_strings(payload.default_tags),
+            compact_strings(payload.target_roles),
+            compact_strings(payload.skill_keywords),
+            compact_strings(payload.domains),
+            payload.semantic_profile,
         )
         self.db.commit()
         self.db.refresh(bank)
@@ -56,7 +60,15 @@ class QuestionBankService:
         if payload.description is not None:
             bank.description = payload.description
         if payload.default_tags is not None:
-            bank.default_tags = payload.default_tags
+            bank.default_tags = compact_strings(payload.default_tags)
+        if payload.target_roles is not None:
+            bank.target_roles = compact_strings(payload.target_roles)
+        if payload.skill_keywords is not None:
+            bank.skill_keywords = compact_strings(payload.skill_keywords)
+        if payload.domains is not None:
+            bank.domains = compact_strings(payload.domains)
+        if payload.semantic_profile is not None:
+            bank.semantic_profile_json = payload.semantic_profile
         self.db.commit()
         return self.get_accessible_bank(user, bank.id)
 
@@ -111,3 +123,7 @@ class QuestionBankService:
             if member and member.role == "owner":
                 return
         raise AppError("FORBIDDEN", "无权修改该题库", status_code=403)
+
+
+def compact_strings(values: list[str]) -> list[str]:
+    return list(dict.fromkeys(value.strip() for value in values if value.strip()))

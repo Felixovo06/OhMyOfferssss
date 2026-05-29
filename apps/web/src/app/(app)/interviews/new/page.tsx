@@ -55,6 +55,7 @@ export default function NewInterviewPage() {
   const [difficulty, setDifficulty] = useState<string>("")
   const [questionCount, setQuestionCount] = useState("5")
   const [goal, setGoal] = useState("")
+  const [flowMode, setFlowMode] = useState<"project" | "knowledge">("project")
   const { data: resume } = useResume(mode === "custom" && selectedResumeId ? selectedResumeId : null)
 
   const activeBankIds = bankSelectionTouched
@@ -95,6 +96,7 @@ export default function NewInterviewPage() {
         goal: goal || undefined,
         mode,
         resume_id: mode === "custom" ? selectedResumeId : undefined,
+        flow_mode: mode === "custom" ? flowMode : undefined,
       },
       {
         onSuccess: (session) => {
@@ -236,6 +238,67 @@ export default function NewInterviewPage() {
         </section>
       )}
 
+      {/* Interview Flow Mode */}
+      <section className="space-y-3">
+        <h2 className="text-sm font-medium">面试流程</h2>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <button
+            type="button"
+            onClick={() => setFlowMode("project")}
+            className={`rounded-lg border p-3 text-left transition-all ${
+              flowMode === "project" ? "border-primary bg-primary/5" : "hover:bg-accent/50"
+            }`}
+          >
+            <p className="text-sm font-medium">项目优先</p>
+            <p className="mt-1 text-xs text-muted-foreground">先围绕简历项目经历追问，再联动知识库题查漏补缺</p>
+          </button>
+          <button
+            type="button"
+            onClick={() => setFlowMode("knowledge")}
+            className={`rounded-lg border p-3 text-left transition-all ${
+              flowMode === "knowledge" ? "border-primary bg-primary/5" : "hover:bg-accent/50"
+            }`}
+          >
+            <p className="text-sm font-medium">知识优先</p>
+            <p className="mt-1 text-xs text-muted-foreground">先考察知识点掌握，再结合回答追问项目经历</p>
+          </button>
+        </div>
+      </section>
+
+      {/* Recommended Banks */}
+      {mode === "custom" && banks && banks.length > 0 && (
+        <section className="space-y-3 rounded-lg border border-primary/20 bg-primary/[0.02] p-4">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-primary" />
+            <p className="text-sm font-medium">AI 推荐题库</p>
+          </div>
+          <p className="text-xs text-muted-foreground">根据你的简历和目标，以下题库与你的面试方向最匹配</p>
+          <div className="space-y-2">
+            {banks.slice(0, 3).map((bank, i) => {
+              const reasons = [
+                "技能关键词与简历高度匹配",
+                "题目难度梯度适合该岗位",
+                "覆盖目标岗位核心知识点",
+              ]
+              return (
+                <div key={bank.id} className="flex items-start gap-3">
+                  <div className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-medium ${
+                    i === 0 ? "bg-primary text-primary-foreground" : "bg-primary/10 text-primary"
+                  }`}>
+                    {i + 1}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium">{bank.name}</p>
+                    <p className="text-xs text-muted-foreground">{reasons[i]}</p>
+                  </div>
+                  <Badge variant="secondary" className="shrink-0 text-[10px]">{bank.question_count} 题</Badge>
+                </div>
+              )
+            })}
+          </div>
+        </section>
+      )}
+
       {/* Select Banks */}
       <section className="space-y-3">
         <h2 className="text-sm font-medium">选择题库</h2>
@@ -284,8 +347,18 @@ export default function NewInterviewPage() {
                     {bank.description && (
                       <p className="text-xs text-muted-foreground line-clamp-1">{bank.description}</p>
                     )}
-                    <p className="mt-0.5 text-[10px] text-muted-foreground">{bank.question_count} 题</p>
+                    <p className="mt-0.5 flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                      {bank.question_count} 题
+                      {bank.target_positions && bank.target_positions.length > 0 && (
+                        <span>· 适配 {bank.target_positions.slice(0, 2).join("、")}</span>
+                      )}
+                    </p>
                   </div>
+                  {bank.target_positions && bank.target_positions.some((p) => goal.toLowerCase().includes(p.toLowerCase())) && (
+                    <Badge variant="secondary" className="shrink-0 text-[10px] text-primary">
+                      推荐
+                    </Badge>
+                  )}
                 </button>
               )
             })}
