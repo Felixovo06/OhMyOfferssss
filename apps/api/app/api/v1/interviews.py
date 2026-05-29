@@ -213,7 +213,6 @@ def stage_label(stage: str) -> str:
         "knowledge_linked": "知识点考察",
         "knowledge_probe": "知识点考察",
         "knowledge": "知识点考察",
-        "general_probe": "岗位通用",
     }
     return labels.get(stage, stage)
 

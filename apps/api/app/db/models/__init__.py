@@ -134,8 +134,6 @@ class QuestionBank(Base, TimestampMixin):
     skill_keywords: Mapped[list[str]] = mapped_column(JSON, default=list)
     domains: Mapped[list[str]] = mapped_column(JSON, default=list)
     semantic_profile_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
-    retrieval_embedding_json: Mapped[list[float]] = mapped_column(JSON, default=list)
-    retrieval_text_hash: Mapped[str | None] = mapped_column(String(64))
 
     questions: Mapped[list["Question"]] = relationship(
         back_populates="bank",
@@ -180,8 +178,6 @@ class Question(Base, TimestampMixin):
     source_type: Mapped[str] = mapped_column(String(30), nullable=False, default="manual")
     source_block_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    retrieval_embedding_json: Mapped[list[float]] = mapped_column(JSON, default=list)
-    retrieval_text_hash: Mapped[str | None] = mapped_column(String(64))
 
     bank: Mapped[QuestionBank] = relationship(back_populates="questions")
     tags: Mapped[list["QuestionTag"]] = relationship(
