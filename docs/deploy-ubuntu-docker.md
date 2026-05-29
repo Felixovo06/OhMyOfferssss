@@ -76,6 +76,24 @@ Open:
 http://YOUR_SERVER_IP
 ```
 
+## External PostgreSQL / Redis
+
+If your PostgreSQL and Redis already live on another server, do not use the default compose file.
+Fill these in `.env`:
+
+```env
+DATABASE_URL=postgresql+psycopg://postgres:YOUR_PASSWORD@YOUR_DB_HOST:5432/postgres
+REDIS_URL=redis://:YOUR_REDIS_PASSWORD@YOUR_REDIS_HOST:6379/0
+```
+
+Then start only the app containers:
+
+```bash
+docker compose -f docker-compose.external.yml up -d --build
+```
+
+The API container will run Alembic against the external PostgreSQL on startup.
+
 API health checks:
 
 ```bash
