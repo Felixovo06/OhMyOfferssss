@@ -1,3 +1,7 @@
+import hashlib
+import math
+import re
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
@@ -5,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.clients.llm import (
     BankRankingResult,
+    BankRecommendationResult,
     InterviewCandidate,
     InterviewPlanResult,
     InterviewStagePlanResult,
@@ -192,6 +197,7 @@ class InterviewService:
             return False
 
         selection_context = self._selection_context(session)
+        retrieval_candidates = self._hybrid_retrieval_candidates(candidates, session, limit=10)
         selection = self.llm.select_interview_questions(
             [
                 InterviewCandidate(
@@ -202,18 +208,19 @@ class InterviewService:
                     difficulty_score=question.difficulty_score or 50,
                     difficulty_label=question.difficulty_label or "medium",
                 )
-                for question in candidates
+                for question in retrieval_candidates
             ],
             question_count=INITIAL_QUESTION_BATCH_SIZE,
             target=selection_context,
         )
+        retrieval_candidate_ids = {question.id for question in retrieval_candidates}
         selected_id = next(
             (
                 item.question_id
                 for item in selection.items
-                if item.question_id in {question.id for question in candidates}
+                if item.question_id in retrieval_candidate_ids
             ),
-            candidates[0].id,
+            retrieval_candidates[0].id,
         )
         plan_stages = [
             InterviewStagePlanResult.model_validate(stage)
@@ -226,11 +233,19 @@ class InterviewService:
             session.resume.summary_json if session.resume else None,
         ).get(selected_id, {})
         reason_by_id = {item.question_id: item.reason for item in selection.items}
+        rank_reason = next(
+            (
+                question.retrieval_reason
+                for question in _ranked_candidates(candidates, session)
+                if question.question.id == selected_id
+            ),
+            "混合检索候选题。",
+        )
         self.interviews.create_item(
             session.id,
             selected_id,
             len(session.items) + 1,
-            reason_by_id.get(selected_id, "按需补充下一题。"),
+            reason_by_id.get(selected_id, rank_reason),
             stage=metadata.get("stage") or "knowledge",
             intent=metadata.get("intent") or "知识点考察",
             related_project=metadata.get("related_project"),
@@ -456,7 +471,7 @@ class InterviewService:
             return
         resume_summary = session.resume.summary_json if session.resume else None
         banks = self._candidate_banks(user, payload.bank_ids)
-        ranking, plan, selected_bank_ids = self._build_interview_plan(
+        ranking, plan, selected_bank_ids = self._build_retrieval_plan(
             banks,
             resume_summary,
             session.target,
@@ -471,6 +486,57 @@ class InterviewService:
         session.config_json = config
         session.strategy = plan.strategy
         session.selection_reason = ranking.reason
+
+    def _build_retrieval_plan(
+        self,
+        banks: list[QuestionBank],
+        resume_summary: dict[str, Any] | None,
+        target: str | None,
+        flow_mode: str,
+        question_count: int,
+    ) -> tuple[BankRankingResult, InterviewPlanResult, list[str]]:
+        ranked_banks = _rank_banks_for_retrieval(banks, resume_summary, target)
+        selected_bank_ids = [
+            bank.bank.id for bank in ranked_banks if bank.bank.question_count > 0
+        ][:5]
+        bank_candidates = [bank_to_candidate(item.bank) for item in ranked_banks]
+        recommendations = [
+            BankRecommendationResult(
+                bank_id=item.bank.id,
+                name=item.bank.name,
+                score=item.score,
+                reasons=[item.reason],
+                matched_keywords=item.matched_keywords,
+                question_count=item.bank.question_count,
+            )
+            for item in ranked_banks
+        ]
+        ranking = BankRankingResult(
+            strategy="混合检索：先按题库描述、岗位、简历技能和题量收敛候选题库。",
+            reason="已用检索策略完成题库候选收敛，避免首题阶段多次大模型调用。",
+            recommendations=recommendations,
+        )
+        plan = _build_quota_plan(
+            resume_summary=resume_summary,
+            target=target,
+            flow_mode=flow_mode,
+            question_count=question_count,
+            selected_banks=bank_candidates[:5],
+        )
+        return ranking, plan, selected_bank_ids
+
+    def _hybrid_retrieval_candidates(
+        self,
+        candidates: list[Question],
+        session: InterviewSession,
+        *,
+        limit: int,
+    ) -> list[Question]:
+        ranked = _ranked_candidates(candidates, session)
+        for item in ranked:
+            _ensure_question_retrieval_embedding(item.question)
+        self.db.flush()
+        return [item.question for item in ranked[: max(1, limit)]]
 
     def _selection_context(self, session: InterviewSession) -> str | None:
         base = self._target_with_resume_context(
@@ -553,6 +619,292 @@ def bank_to_candidate(bank: QuestionBank) -> QuestionBankCandidate:
     )
 
 
+@dataclass(frozen=True)
+class RankedBank:
+    bank: QuestionBank
+    score: int
+    reason: str
+    matched_keywords: list[str]
+
+
+@dataclass(frozen=True)
+class RankedQuestion:
+    question: Question
+    score: float
+    retrieval_reason: str
+
+
+def _rank_banks_for_retrieval(
+    banks: list[QuestionBank],
+    resume_summary: dict[str, Any] | None,
+    target: str | None,
+) -> list[RankedBank]:
+    query_terms = set(_retrieval_terms(_resume_query_text(resume_summary, target)))
+    query_vector = _embedding_for_text(_resume_query_text(resume_summary, target))
+    ranked: list[RankedBank] = []
+    for bank in banks:
+        bank_text = _bank_retrieval_text(bank)
+        bank_terms = set(_retrieval_terms(bank_text))
+        matched = sorted(query_terms & bank_terms)
+        vector_score = _cosine(query_vector, _embedding_for_text(bank_text))
+        keyword_score = min(35, len(matched) * 8)
+        volume_score = min(20, bank.question_count * 2)
+        score = max(0, min(100, round(vector_score * 45 + keyword_score + volume_score)))
+        reasons = []
+        if matched:
+            reasons.append(f"匹配关键词：{'、'.join(matched[:6])}")
+        if bank.question_count:
+            reasons.append(f"题量 {bank.question_count}")
+        ranked.append(
+            RankedBank(
+                bank=bank,
+                score=score,
+                reason="；".join(reasons) or "作为补充候选题库。",
+                matched_keywords=matched[:10],
+            ),
+        )
+    ranked.sort(key=lambda item: (-item.score, item.bank.name))
+    return ranked
+
+
+def _build_quota_plan(
+    *,
+    resume_summary: dict[str, Any] | None,
+    target: str | None,
+    flow_mode: str,
+    question_count: int,
+    selected_banks: list[QuestionBankCandidate],
+) -> InterviewPlanResult:
+    skills = list((resume_summary or {}).get("skills") or [])
+    bank_focus = [
+        keyword
+        for bank in selected_banks
+        for keyword in [*bank.skill_keywords, *bank.default_tags, *bank.domains]
+    ]
+    focus = list(dict.fromkeys([*skills, *bank_focus]))[:8] or ["岗位基础", "项目实践"]
+    project_count = 1 if question_count <= 2 else max(1, round(question_count * 0.4))
+    general_count = 0 if question_count <= 2 else max(1, round(question_count * 0.3))
+    skill_count = max(0, question_count - project_count - general_count)
+    if flow_mode == "project_first":
+        stages = [
+            InterviewStagePlanResult(
+                stage="project_deep_dive",
+                title="项目深挖",
+                objective="围绕简历项目确认真实参与度、关键方案和技术取舍。",
+                question_count=project_count,
+                focus=focus[:5],
+            ),
+            InterviewStagePlanResult(
+                stage="knowledge_linked",
+                title="项目知识点联动",
+                objective="从项目相关技术点延伸到知识库题目，确认原理和边界。",
+                question_count=skill_count,
+                focus=focus[:6],
+            ),
+            InterviewStagePlanResult(
+                stage="general_probe",
+                title="岗位通用考察",
+                objective="保留岗位高频基础题和八股题配额，避免只围绕简历发问。",
+                question_count=general_count,
+                focus=[target or "岗位基础", *focus[:4]],
+            ),
+        ]
+    else:
+        stages = [
+            InterviewStagePlanResult(
+                stage="general_probe",
+                title="岗位通用考察",
+                objective="先通过岗位高频基础题判断知识面和基本功。",
+                question_count=general_count,
+                focus=[target or "岗位基础", *focus[:4]],
+            ),
+            InterviewStagePlanResult(
+                stage="knowledge_probe",
+                title="知识点抽查",
+                objective="围绕简历技能和题库标签抽查核心知识点。",
+                question_count=skill_count,
+                focus=focus[:6],
+            ),
+            InterviewStagePlanResult(
+                stage="project_follow_up",
+                title="项目反向追问",
+                objective="把知识题落回简历项目，确认实践深度。",
+                question_count=project_count,
+                focus=focus[:5],
+            ),
+        ]
+    stages = [stage for stage in stages if stage.question_count > 0]
+    return InterviewPlanResult(
+        flow_mode=flow_mode,
+        strategy="按项目、知识点和岗位通用题配额组织混合检索面试。",
+        reason="检索阶段先收敛候选池，再由大模型对少量候选做最终选题。",
+        stages=stages,
+    )
+
+
+def _ranked_candidates(
+    candidates: list[Question],
+    session: InterviewSession,
+) -> list[RankedQuestion]:
+    config = session.config_json or {}
+    stages = [
+        InterviewStagePlanResult.model_validate(stage)
+        for stage in config.get("stage_plan", [])
+    ]
+    next_position = len(session.items) + 1
+    stage = _stage_for_position(stages, next_position)
+    query_text = _question_query_text(session, stage)
+    query_terms = set(_retrieval_terms(query_text))
+    query_vector = _embedding_for_text(query_text)
+    answered_tags = [
+        tag
+        for item in session.items
+        if item.status == "answered"
+        for tag in item.question.tag_names
+    ]
+    ranked: list[RankedQuestion] = []
+    for question in candidates:
+        question_text = _question_retrieval_text(question)
+        question_terms = set(_retrieval_terms(question_text))
+        matched = sorted(query_terms & question_terms)
+        vector_score = _cosine(query_vector, _embedding_for_text(question_text))
+        keyword_score = len(matched) * 4
+        stage_score = _stage_match_score(question, stage)
+        difficulty_score = 10 - abs((question.difficulty_score or 50) - 60) / 10
+        diversity_penalty = _diversity_penalty(question.tag_names, answered_tags)
+        score = (
+            vector_score * 55
+            + keyword_score
+            + stage_score
+            + difficulty_score
+            - diversity_penalty
+        )
+        reason = (
+            f"向量相似度 {round(vector_score, 2)}，"
+            f"命中 {'、'.join(matched[:5]) or '少量关键词'}，阶段 {_stage_label(stage)}。"
+        )
+        ranked.append(RankedQuestion(question=question, score=score, retrieval_reason=reason))
+    ranked.sort(key=lambda item: (-item.score, item.question.updated_at))
+    return ranked
+
+
+def _stage_for_position(stages: list[InterviewStagePlanResult], position: int) -> str:
+    cursor = 0
+    for stage in stages:
+        cursor += max(0, stage.question_count)
+        if position <= cursor:
+            return stage.stage
+    return stages[-1].stage if stages else "knowledge"
+
+
+def _question_query_text(session: InterviewSession, stage: str) -> str:
+    resume_summary = session.resume.summary_json if session.resume else None
+    if stage == "general_probe":
+        return f"{session.target or ''} 岗位通用基础 高频八股 常识题"
+    answered_context = " ".join(
+        item.question.question
+        for item in sorted(session.items, key=lambda item: item.position)[-2:]
+    )
+    return " ".join(
+        [
+            _resume_query_text(resume_summary, session.target),
+            _stage_label(stage),
+            answered_context,
+        ],
+    )
+
+
+def _resume_query_text(resume_summary: dict[str, Any] | None, target: str | None) -> str:
+    parts = [target or ""]
+    if not resume_summary:
+        return " ".join(parts)
+    parts.extend(str(skill) for skill in resume_summary.get("skills") or [])
+    parts.extend(str(direction) for direction in resume_summary.get("follow_up_directions") or [])
+    for project in resume_summary.get("projects") or []:
+        if not isinstance(project, dict):
+            continue
+        parts.append(str(project.get("name") or ""))
+        parts.append(str(project.get("description") or ""))
+        parts.extend(str(tech) for tech in project.get("technologies") or [])
+    return " ".join(parts)
+
+
+def _bank_retrieval_text(bank: QuestionBank) -> str:
+    return " ".join(
+        [
+            bank.name,
+            bank.description or "",
+            *bank.default_tags,
+            *bank.target_roles,
+            *bank.skill_keywords,
+            *bank.domains,
+        ],
+    )
+
+
+def _question_retrieval_text(question: Question) -> str:
+    bank = question.bank
+    return " ".join(
+        [
+            question.question,
+            question.answer or "",
+            *question.tag_names,
+            _bank_retrieval_text(bank) if bank else "",
+        ],
+    )
+
+
+def _retrieval_terms(text: str) -> list[str]:
+    return [
+        part
+        for part in re.split(r"[\s,，。；;：:、/()\[\]{}<>]+", text.lower())
+        if len(part) >= 2
+    ]
+
+
+def _embedding_for_text(text: str, *, dimensions: int = 96) -> list[float]:
+    vector = [0.0] * dimensions
+    terms = _retrieval_terms(text)
+    if not terms:
+        return vector
+    for term in terms:
+        digest = hashlib.sha256(term.encode("utf-8")).digest()
+        index = int.from_bytes(digest[:4], "big") % dimensions
+        sign = 1.0 if digest[4] % 2 == 0 else -1.0
+        vector[index] += sign
+    norm = math.sqrt(sum(value * value for value in vector)) or 1.0
+    return [value / norm for value in vector]
+
+
+def _cosine(left: list[float], right: list[float]) -> float:
+    return sum(a * b for a, b in zip(left, right, strict=False))
+
+
+def _stage_match_score(question: Question, stage: str) -> float:
+    text = _question_retrieval_text(question)
+    if stage in {"project_deep_dive", "project_follow_up"}:
+        return 14 if any(word in text for word in ("项目", "实践", "方案", "系统")) else 0
+    if stage == "general_probe":
+        return 12 if any(word in text for word in ("基础", "原理", "区别", "什么是")) else 4
+    return 10 if question.tag_names else 4
+
+
+def _diversity_penalty(question_tags: list[str], answered_tags: list[str]) -> float:
+    if not question_tags or not answered_tags:
+        return 0
+    overlap = len(set(question_tags) & set(answered_tags))
+    return min(12, overlap * 4)
+
+
+def _ensure_question_retrieval_embedding(question: Question) -> None:
+    text = _question_retrieval_text(question)
+    text_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    if question.retrieval_text_hash == text_hash and question.retrieval_embedding_json:
+        return
+    question.retrieval_text_hash = text_hash
+    question.retrieval_embedding_json = _embedding_for_text(text)
+
+
 def _stage_label(stage: str) -> str:
     labels = {
         "project_deep_dive": "项目追问",
@@ -560,5 +912,6 @@ def _stage_label(stage: str) -> str:
         "knowledge_linked": "知识点考察",
         "knowledge_probe": "知识点考察",
         "knowledge": "知识点考察",
+        "general_probe": "岗位通用",
     }
     return labels.get(stage, stage)
