@@ -155,6 +155,64 @@ def test_project_first_interview_stores_stage_metadata(client: TestClient) -> No
     assert summary["review_plan"]
 
 
+def test_interview_candidate_retrieval_prefers_goal_topics(client: TestClient) -> None:
+    token = login(client, "phase6-retrieval-owner@example.com")
+    headers = {"Authorization": f"Bearer {token}"}
+    bank_id = create_phase6_bank(
+        client,
+        headers,
+        name="混合后端题库",
+        skill_keywords=["Java", "Redis", "React"],
+        domains=["后端", "前端"],
+    )
+    create_phase6_question(
+        client,
+        headers,
+        bank_id,
+        "volatile 的作用是什么？",
+        tags=["Java并发"],
+        difficulty=60,
+    )
+    create_phase6_question(
+        client,
+        headers,
+        bank_id,
+        "什么是缓存穿透、击穿、雪崩？",
+        tags=["Redis"],
+        difficulty=65,
+    )
+    create_phase6_question(
+        client,
+        headers,
+        bank_id,
+        "React key 的作用是什么？",
+        tags=["React"],
+        difficulty=50,
+    )
+
+    response = client.post(
+        "/api/v1/interviews",
+        json={
+            "bank_ids": [bank_id],
+            "target": "我要面试 3 年 Java 后端，重点考并发、Redis、MySQL，时长 30 分钟",
+            "question_count": 1,
+            "duration_minutes": 30,
+        },
+        headers=headers,
+    )
+    assert response.status_code == 200
+    session = response.json()["data"]
+
+    start_response = client.post(
+        f"/api/v1/interviews/{session['id']}/start",
+        headers=headers,
+    )
+    assert start_response.status_code == 200
+    first_question = start_response.json()["data"]["items"][0]["question"]
+    assert "React" not in first_question["content"]
+    assert set(first_question["tags"]) & {"Java并发", "Redis"}
+
+
 def test_smart_interview_rejects_unready_resume(client: TestClient) -> None:
     token = login(client, "phase6-unready-resume@example.com")
     headers = {"Authorization": f"Bearer {token}"}
@@ -220,14 +278,17 @@ def create_phase6_question(
     headers: dict[str, str],
     bank_id: str,
     content: str,
+    *,
+    tags: list[str] | None = None,
+    difficulty: int = 70,
 ) -> None:
     response = client.post(
         f"/api/v1/banks/{bank_id}/questions",
         json={
             "content": content,
             "answer": "需要结合项目背景、核心方案、边界问题和取舍说明。",
-            "tags": ["Redis", "后端"],
-            "difficulty": 70,
+            "tags": tags or ["Redis", "后端"],
+            "difficulty": difficulty,
         },
         headers=headers,
     )

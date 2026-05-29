@@ -137,6 +137,7 @@ function normalizeSession(raw: BackendInterviewSession): {
       tags: raw.config?.tags ?? [],
       difficulty: raw.config?.difficulty,
       question_count: targetCount,
+      duration_minutes: raw.config?.duration_minutes,
       goal: raw.target ?? raw.config?.goal,
       mode: raw.mode,
       resume_id: raw.resume_id ?? undefined,

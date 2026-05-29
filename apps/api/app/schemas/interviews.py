@@ -14,6 +14,7 @@ class InterviewCreate(BaseModel):
     difficulty_min: int | None = Field(default=None, ge=0, le=100)
     difficulty_max: int | None = Field(default=None, ge=0, le=100)
     question_count: int = Field(default=5, ge=1, le=20)
+    duration_minutes: int | None = Field(default=None, ge=1, le=180)
     goal: str | None = Field(default=None, max_length=300)
     target: str | None = Field(default=None, max_length=300)
     title: str | None = Field(default=None, max_length=160)
@@ -34,6 +35,7 @@ class InterviewPlanRequest(BaseModel):
     bank_ids: list[str] = Field(default_factory=list, max_length=100)
     tags: list[str] = Field(default_factory=list, max_length=12)
     question_count: int = Field(default=5, ge=1, le=20)
+    duration_minutes: int | None = Field(default=None, ge=1, le=180)
     target: str | None = Field(default=None, max_length=300)
     goal: str | None = Field(default=None, max_length=300)
     resume_id: str | None = None

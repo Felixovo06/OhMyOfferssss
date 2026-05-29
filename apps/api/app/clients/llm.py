@@ -247,7 +247,8 @@ class LLMClient:
                 {
                     "role": "system",
                     "content": (
-                        "你是面试官。请从候选题中选择普通面试题，必须调用 "
+                        "你是面试官。下面的候选题已经由检索系统完成过滤、召回、"
+                        "去重和重排。请只从候选题中选择，不要发明新题，必须调用 "
                         "return_interview_selection 工具返回结果。"
                     ),
                 },
@@ -657,18 +658,11 @@ class LLMClient:
         question_count: int,
         target: str | None,
     ) -> InterviewSelection:
-        sorted_candidates = sorted(
-            candidates,
-            key=lambda candidate: (
-                abs(candidate.difficulty_score - 50),
-                candidate.question,
-            ),
-        )
-        selected = sorted_candidates[:question_count]
+        selected = candidates[:question_count]
         target_text = f"，目标是{target}" if target else ""
         return InterviewSelection(
-            strategy=f"优先选择启用题中难度居中、覆盖标签较广的题目{target_text}。",
-            reason="当前使用规则兜底抽题，保证面试能在无大模型配置时继续进行。",
+            strategy=f"沿用本地硬过滤、混合召回、去重重排后的候选顺序选题{target_text}。",
+            reason="当前使用规则兜底抽题，LLM 未配置时仍只从已召回候选题中选择。",
             items=[
                 InterviewSelectionItem(
                     question_id=candidate.id,

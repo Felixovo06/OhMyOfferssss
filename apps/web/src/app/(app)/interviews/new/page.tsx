@@ -61,6 +61,7 @@ export default function NewInterviewPage() {
   const [selectedTags, setSelectedTags] = useState<string>("")
   const [difficulty, setDifficulty] = useState<string>("")
   const [questionCount, setQuestionCount] = useState("5")
+  const [durationMinutes, setDurationMinutes] = useState("30")
   const [goal, setGoal] = useState("")
   const [flowMode, setFlowMode] = useState<"project" | "knowledge">("project")
   const { data: resume } = useResume(mode === "custom" && selectedResumeId ? selectedResumeId : null)
@@ -108,6 +109,7 @@ export default function NewInterviewPage() {
           : undefined,
         difficulty: difficulty ? Number(difficulty) : undefined,
         question_count: Number(questionCount),
+        duration_minutes: Number(durationMinutes),
         goal: goal || undefined,
         mode,
         resume_id: mode === "custom" ? selectedResumeId : undefined,
@@ -549,7 +551,21 @@ export default function NewInterviewPage() {
               </SelectContent>
             </Select>
           </div>
-          <div />
+          <div>
+            <label className="text-xs text-muted-foreground">面试时长</label>
+            <Select value={durationMinutes} onValueChange={(v) => setDurationMinutes(v || "30")}>
+              <SelectTrigger className="mt-1">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {[15, 30, 60].map((minutes) => (
+                  <SelectItem key={minutes} value={String(minutes)}>
+                    {minutes} 分钟
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
         <div>
           <label className="text-xs text-muted-foreground">面试目标（可选）</label>

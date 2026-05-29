@@ -3,6 +3,7 @@ export interface InterviewConfig {
   tags?: string[]
   difficulty?: number
   question_count: number
+  duration_minutes?: number
   goal?: string
   mode?: "normal" | "custom"
   resume_id?: string
@@ -15,6 +16,7 @@ export interface InterviewSession {
   tags: string[]
   difficulty?: number
   question_count: number
+  duration_minutes?: number
   goal?: string
   mode?: "normal" | "custom"
   resume_id?: string
