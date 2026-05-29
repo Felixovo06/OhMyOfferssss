@@ -1,0 +1,41 @@
+[project]
+name = "ohmyoffer-api"
+version = "0.1.0"
+description = "FastAPI backend for the Ohmyoffer AI interview practice app."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "alembic>=1.16.0",
+  "bcrypt>=4.3.0",
+  "fastapi[standard]>=0.115.0",
+  "httpx>=0.28.0",
+  "psycopg[binary]>=3.2.0",
+  "pydantic-settings>=2.9.0",
+  "pyjwt>=2.10.0",
+  "redis>=6.1.0",
+  "sqlalchemy>=2.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "mypy>=1.15.0",
+  "pytest>=8.3.0",
+  "ruff>=0.11.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.mypy]
+python_version = "3.12"
+plugins = ["pydantic.mypy"]
+strict = true
+warn_unused_ignores = false

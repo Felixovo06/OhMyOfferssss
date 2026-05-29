@@ -1,0 +1,80 @@
+from sqlalchemy.orm import Session
+
+from app.core.errors import AppError
+from app.db.models import QuestionBank, User
+from app.db.repositories.groups import GroupRepository
+from app.db.repositories.question_banks import QuestionBankRepository
+from app.schemas.question_banks import QuestionBankCreate, QuestionBankUpdate
+
+
+class QuestionBankService:
+    def __init__(self, db: Session) -> None:
+        self.db = db
+        self.banks = QuestionBankRepository(db)
+        self.groups = GroupRepository(db)
+
+    def list_banks(self, user: User) -> list[QuestionBank]:
+        return self.banks.list_accessible(user)
+
+    def get_accessible_bank(self, user: User, bank_id: str) -> QuestionBank:
+        bank = self.banks.get(bank_id)
+        if bank is None:
+            raise AppError("QUESTION_BANK_NOT_FOUND", "题库不存在", status_code=404)
+        if not self._can_access(user, bank):
+            raise AppError("FORBIDDEN", "无权访问该题库", status_code=403)
+        return bank
+
+    def create_bank(self, user: User, payload: QuestionBankCreate) -> QuestionBank:
+        if payload.group_id:
+            member = self.groups.get_member(payload.group_id, user.id)
+            if member is None:
+                raise AppError("FORBIDDEN", "无权在该小组创建题库", status_code=403)
+            if member.role != "owner":
+                raise AppError("FORBIDDEN", "只有小组 owner 可以创建小组题库", status_code=403)
+        bank = self.banks.create(
+            user,
+            payload.name,
+            payload.description,
+            payload.group_id,
+            payload.default_tags,
+        )
+        self.db.commit()
+        self.db.refresh(bank)
+        return self.get_accessible_bank(user, bank.id)
+
+    def update_bank(
+        self,
+        user: User,
+        bank_id: str,
+        payload: QuestionBankUpdate,
+    ) -> QuestionBank:
+        bank = self.get_accessible_bank(user, bank_id)
+        self._require_bank_owner(user, bank)
+        if payload.name is not None:
+            bank.name = payload.name
+        if payload.description is not None:
+            bank.description = payload.description
+        if payload.default_tags is not None:
+            bank.default_tags = payload.default_tags
+        self.db.commit()
+        return self.get_accessible_bank(user, bank.id)
+
+    def delete_bank(self, user: User, bank_id: str) -> None:
+        bank = self.get_accessible_bank(user, bank_id)
+        self._require_bank_owner(user, bank)
+        self.db.delete(bank)
+        self.db.commit()
+
+    def _can_access(self, user: User, bank: QuestionBank) -> bool:
+        if bank.created_by_id == user.id:
+            return True
+        return bool(bank.group_id and self.groups.get_member(bank.group_id, user.id))
+
+    def _require_bank_owner(self, user: User, bank: QuestionBank) -> None:
+        if bank.created_by_id == user.id:
+            return
+        if bank.group_id:
+            member = self.groups.get_member(bank.group_id, user.id)
+            if member and member.role == "owner":
+                return
+        raise AppError("FORBIDDEN", "无权修改该题库", status_code=403)
