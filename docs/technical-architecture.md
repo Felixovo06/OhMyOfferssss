@@ -2,15 +2,20 @@
 
 ## 1. 架构目标
 
-项目采用前后端分离架构。前端专注页面、交互、状态和用户体验；后端专注业务能力、数据、权限、飞书 API、AI 能力和任务编排。
+项目采用前后端分离，并且前后端使用不同语言降低职责混淆：
 
-第一版目标是快速做出可用 MVP，同时保持后续可拆分、可联调、可部署。
+- 前端：TypeScript / Next.js，负责 UI、交互、状态和用户体验。
+- 后端：Python / FastAPI，负责业务逻辑、数据、权限、飞书 API、AI 能力和任务编排。
+
+第一版目标是快速做出可用 MVP，同时保持两边可以独立开发、独立测试、独立部署。
 
 核心原则：
 
-- 前端和后端通过 HTTP API 契约协作。
+- 前后端只通过 HTTP API 和 OpenAPI 契约协作。
 - 前端不直接访问数据库、Redis、飞书 API 或大模型 API。
-- 后端不关心页面细节，只提供稳定业务接口。
+- 后端不写前端页面逻辑，只提供稳定业务接口。
+- 不做 TS shared package 绑定前后端，避免两边职责重新混在一起。
+- 后端以 OpenAPI 作为唯一接口事实来源，前端可基于 OpenAPI 生成 API client。
 - 所有 AI 能力通过统一 LLM Client 封装。
 - 飞书导入和 AI 抽题结果必须支持人工确认。
 - PDF 简历优先用文本解析，扫描件再考虑 OCR 或视觉模型兜底。
@@ -23,22 +28,26 @@
 - 语言：TypeScript
 - UI：Tailwind CSS + shadcn/ui
 - 表单：React Hook Form + Zod
-- 请求：TanStack Query 或 SWR
+- 请求：TanStack Query
+- API Client：基于 OpenAPI 生成，或封装 typed fetch
 - 图标：lucide-react
 - 状态：优先 URL state + server state，必要时使用 Zustand
 - 设计要求：涉及 UI/UX 必须使用 `ui-ux-pro-max`
 
 ### 2.2 后端
 
-- 框架：NestJS
-- 语言：TypeScript
-- ORM：Prisma
+- 框架：FastAPI
+- 语言：Python 3.12+
+- 数据模型/校验：Pydantic v2
+- ORM：SQLAlchemy 2.0
+- 迁移：Alembic
 - 数据库：PostgreSQL
 - 缓存：Redis
-- 队列：第一版可不用队列，长任务先用状态轮询；后续可接 BullMQ
+- 异步任务：第一版先用接口状态轮询；后续可接 Celery/RQ/Arq
 - 鉴权：JWT + HttpOnly Cookie 或 Bearer Token
-- API 文档：OpenAPI / Swagger
-- 校验：Zod 或 class-validator，建议统一使用 Zod schema
+- API 文档：FastAPI 自动生成 OpenAPI
+- 测试：pytest
+- 代码质量：ruff + mypy
 
 ### 2.3 AI 与外部服务
 
@@ -56,35 +65,29 @@
 
 ## 3. 仓库结构
 
-建议使用 monorepo，便于前后端共享类型和 schema。
+建议使用 monorepo，但前端和后端保持语言、依赖和运行时隔离。
 
 ```text
 apps/
   web/
-    app/
-    components/
-    features/
-    lib/
   api/
-    src/
-      modules/
-      common/
-      infra/
-packages/
-  shared/
-    src/
-      schemas/
-      types/
 docs/
 ```
+
+不设置 `packages/shared` 作为强共享代码。共享边界只通过：
+
+- OpenAPI schema
+- API 文档
+- 少量人工维护的枚举说明
 
 ### 3.1 前端目录
 
 ```text
 apps/web/
   app/
-  components/ui/
-  components/layout/
+  components/
+    ui/
+    layout/
   features/
     auth/
     dashboard/
@@ -93,8 +96,10 @@ apps/web/
     imports/
     resumes/
     interviews/
-  lib/api/
-  lib/query/
+  lib/
+    api/
+    query/
+    utils/
 ```
 
 前端约定：
@@ -103,55 +108,58 @@ apps/web/
 - `features/*` 放业务页面组件、hooks、mock、局部类型。
 - `components/ui` 放基础 UI。
 - `lib/api` 放 API client，不直接散落 `fetch`。
+- UI 可以先用 mock 数据开发，但字段命名要贴近 OpenAPI。
 - 涉及 UI/UX 的页面和组件必须用 `ui-ux-pro-max` 设计或评审。
 
 ### 3.2 后端目录
 
 ```text
-apps/api/src/
-  modules/
-    auth/
-    groups/
-    question-banks/
-    questions/
-    imports/
-    resumes/
-    interviews/
-    llm/
-    feishu/
-  common/
-    guards/
-    filters/
-    pipes/
+apps/api/
+  app/
+    main.py
+    api/
+      v1/
+        auth.py
+        groups.py
+        question_banks.py
+        questions.py
+        imports.py
+        resumes.py
+        interviews.py
+    core/
+      config.py
+      security.py
+      errors.py
+    db/
+      session.py
+      models/
+      repositories/
+      migrations/
     schemas/
-  infra/
-    prisma/
-    redis/
-    config/
+    services/
+      auth/
+      groups/
+      question_banks/
+      imports/
+      resumes/
+      interviews/
+      llm/
+      feishu/
+    clients/
+      feishu.py
+      llm.py
+      redis.py
+  tests/
 ```
 
 后端约定：
 
-- 每个业务模块包含 controller、service、repository、schema。
-- controller 只处理 HTTP 入参、鉴权上下文和响应。
-- service 处理业务流程。
-- repository 处理数据库读写。
-- 外部服务通过 client 封装，例如 Feishu Client、LLM Client。
-
-### 3.3 共享包
-
-```text
-packages/shared/src/
-  schemas/
-  types/
-  constants/
-```
-
-共享内容：
-
-- API request/response schema。
-- 枚举，例如面试模式、难度标签、导入状态。
-- 通用类型，例如分页、错误结构。
+- `api/v1` 只处理 HTTP 入参、鉴权上下文和响应。
+- `schemas` 放 Pydantic request/response schema。
+- `services` 处理业务流程。
+- `repositories` 处理数据库读写。
+- `clients` 封装外部服务，例如 Feishu Client、LLM Client、Redis Client。
+- 数据库迁移只通过 Alembic。
 
 ## 4. 模块划分
 
@@ -293,8 +301,10 @@ packages/shared/src/
 - API 前缀：`/api/v1`
 - 数据格式：JSON
 - 时间格式：ISO 8601
-- 分页参数：`page`、`pageSize`
+- 分页参数：`page`、`page_size`
 - 认证方式：HttpOnly Cookie 或 `Authorization: Bearer <token>`
+- OpenAPI 地址：`/openapi.json`
+- Swagger 地址：`/docs`
 
 统一响应：
 
@@ -302,7 +312,7 @@ packages/shared/src/
 {
   "success": true,
   "data": {},
-  "requestId": "req_xxx"
+  "request_id": "req_xxx"
 }
 ```
 
@@ -316,9 +326,15 @@ packages/shared/src/
     "message": "参数错误",
     "details": {}
   },
-  "requestId": "req_xxx"
+  "request_id": "req_xxx"
 }
 ```
+
+命名约定：
+
+- API JSON 字段使用 `snake_case`，贴合 Python 后端。
+- 前端 API client 可以在 UI 层转换成 camelCase，也可以直接使用 snake_case。
+- 枚举值使用小写字符串，例如 `normal`、`custom`、`needs_ocr`。
 
 ### 6.2 Auth API
 
@@ -333,11 +349,11 @@ GET  /api/v1/auth/me
 ```text
 GET  /api/v1/groups
 POST /api/v1/groups
-GET  /api/v1/groups/:groupId
-GET  /api/v1/groups/:groupId/members
-POST /api/v1/groups/:groupId/invitations
-GET  /api/v1/invitations/:token
-POST /api/v1/invitations/:token/accept
+GET  /api/v1/groups/{group_id}
+GET  /api/v1/groups/{group_id}/members
+POST /api/v1/groups/{group_id}/invitations
+GET  /api/v1/invitations/{token}
+POST /api/v1/invitations/{token}/accept
 ```
 
 ### 6.4 Question Bank API
@@ -345,13 +361,13 @@ POST /api/v1/invitations/:token/accept
 ```text
 GET    /api/v1/question-banks
 POST   /api/v1/question-banks
-GET    /api/v1/question-banks/:bankId
-PATCH  /api/v1/question-banks/:bankId
-DELETE /api/v1/question-banks/:bankId
-GET    /api/v1/question-banks/:bankId/questions
-POST   /api/v1/question-banks/:bankId/questions
-PATCH  /api/v1/questions/:questionId
-DELETE /api/v1/questions/:questionId
+GET    /api/v1/question-banks/{bank_id}
+PATCH  /api/v1/question-banks/{bank_id}
+DELETE /api/v1/question-banks/{bank_id}
+GET    /api/v1/question-banks/{bank_id}/questions
+POST   /api/v1/question-banks/{bank_id}/questions
+PATCH  /api/v1/questions/{question_id}
+DELETE /api/v1/questions/{question_id}
 GET    /api/v1/tags
 ```
 
@@ -359,10 +375,10 @@ GET    /api/v1/tags
 
 ```text
 POST  /api/v1/imports/feishu
-GET   /api/v1/imports/:batchId
-GET   /api/v1/imports/:batchId/items
-PATCH /api/v1/import-items/:itemId
-POST  /api/v1/imports/:batchId/confirm
+GET   /api/v1/imports/{batch_id}
+GET   /api/v1/imports/{batch_id}/items
+PATCH /api/v1/import-items/{item_id}
+POST  /api/v1/imports/{batch_id}/confirm
 ```
 
 ### 6.6 Resume API
@@ -370,46 +386,46 @@ POST  /api/v1/imports/:batchId/confirm
 ```text
 POST /api/v1/resumes
 GET  /api/v1/resumes
-GET  /api/v1/resumes/:resumeId
-POST /api/v1/resumes/:resumeId/parse
+GET  /api/v1/resumes/{resume_id}
+POST /api/v1/resumes/{resume_id}/parse
 ```
 
 ### 6.7 Interview API
 
 ```text
 POST /api/v1/interviews
-GET  /api/v1/interviews/:sessionId
-POST /api/v1/interviews/:sessionId/answers
-POST /api/v1/interviews/:sessionId/next
-POST /api/v1/interviews/:sessionId/finish
-GET  /api/v1/interviews/:sessionId/summary
+GET  /api/v1/interviews/{session_id}
+POST /api/v1/interviews/{session_id}/answers
+POST /api/v1/interviews/{session_id}/next
+POST /api/v1/interviews/{session_id}/finish
+GET  /api/v1/interviews/{session_id}/summary
 ```
 
-创建面试请求：
+创建普通面试：
 
 ```json
 {
   "mode": "normal",
-  "bankIds": ["bank_1"],
-  "tagIds": ["tag_1"],
-  "questionCount": 8,
-  "difficultyPreference": "medium_to_hard",
+  "bank_ids": ["bank_1"],
+  "tag_ids": ["tag_1"],
+  "question_count": 8,
+  "difficulty_preference": "medium_to_hard",
   "goal": "准备前端一面",
-  "resumeId": null
+  "resume_id": null
 }
 ```
 
-客制化面试：
+创建客制化面试：
 
 ```json
 {
   "mode": "custom",
-  "bankIds": ["bank_1"],
-  "tagIds": ["tag_1"],
-  "questionCount": 8,
-  "difficultyPreference": "medium_to_hard",
+  "bank_ids": ["bank_1"],
+  "tag_ids": ["tag_1"],
+  "question_count": 8,
+  "difficulty_preference": "medium_to_hard",
   "goal": "前端开发岗位",
-  "resumeId": "resume_1"
+  "resume_id": "resume_1"
 }
 ```
 
@@ -417,12 +433,11 @@ GET  /api/v1/interviews/:sessionId/summary
 
 ### 7.1 通用
 
-- 全项目使用 TypeScript。
-- 禁止 `any` 泛滥，确实需要时必须局部说明。
 - 所有外部输入必须用 schema 校验。
 - 所有敏感信息从环境变量读取。
 - 不在日志中输出密码、token、API Key。
 - 错误信息给用户看时要可理解，日志中保留排查信息。
+- API 变更必须同步更新 OpenAPI 文档。
 
 ### 7.2 前端规范
 
@@ -434,25 +449,31 @@ GET  /api/v1/interviews/:sessionId/summary
 - 错误必须有可读提示。
 - 删除、丢弃、批量确认等危险操作必须二次确认。
 - 移动端不能出现严重横向溢出。
+- 前端通过 OpenAPI client 或统一 API client 调后端，不手写散落请求。
 
 ### 7.3 后端规范
 
-- Controller 不写复杂业务逻辑。
+- FastAPI router 不写复杂业务逻辑。
 - Service 负责业务编排。
 - Repository 负责数据访问。
 - API 写操作必须校验权限。
 - 批量入库必须使用事务。
-- 大模型输出必须校验结构。
+- 大模型输出必须用 Pydantic schema 校验。
 - 飞书 API 调用必须处理分页、限流和权限错误。
+- Python 代码必须通过 ruff。
+- 关键业务逻辑需要 pytest 覆盖。
 
-### 7.4 Git 与协作
+### 7.4 协作规范
 
 - 前端和后端可以独立分支开发。
-- API 变更必须同步更新共享 schema 和技术文档。
-- 前端可以先用 mock 数据开发 UI，但字段必须贴近 API schema。
+- 后端先提供 OpenAPI 契约和 mock 响应。
+- 前端可以先用 mock 数据开发 UI，但字段必须贴近 OpenAPI。
+- API 字段变更必须先改 OpenAPI，再通知前端。
 - 联调前必须确认接口响应结构稳定。
 
 ## 8. 环境变量
+
+### 8.1 后端
 
 ```text
 DATABASE_URL
@@ -467,9 +488,15 @@ FEISHU_APP_SECRET
 FEISHU_API_BASE_URL
 ```
 
+### 8.2 前端
+
+```text
+NEXT_PUBLIC_API_BASE_URL
+```
+
 ## 9. 后续演进
 
-- BullMQ 后台任务。
+- Celery/RQ/Arq 后台任务。
 - OCR 或视觉模型支持扫描件 PDF。
 - 飞书知识库批量同步。
 - 多组织权限。

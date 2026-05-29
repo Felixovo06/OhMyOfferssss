@@ -2,7 +2,7 @@
 
 ## 执行方式
 
-项目按前后端分离推进，但任务阶段按业务闭环划分，适合 vibecoding 快速迭代。
+项目按前后端分离推进，前端使用 TypeScript/Next.js，后端使用 Python/FastAPI。任务阶段按业务闭环划分，适合 vibecoding 快速迭代。
 
 每个阶段只追求一个明确结果：能跑通、能体验、能继续迭代。不要把阶段拆得太碎。
 
@@ -16,9 +16,9 @@
 
 - 建立 monorepo。
 - 创建 `apps/web` 前端项目。
-- 创建 `apps/api` 后端项目。
-- 创建 `packages/shared` 共享类型和 schema。
-- 配置 PostgreSQL、Redis、Prisma。
+- 创建 `apps/api` Python FastAPI 后端项目。
+- 配置 PostgreSQL、Redis、SQLAlchemy、Alembic。
+- 建立 OpenAPI 契约。
 - 实现登录、退出、当前用户。
 - 实现小组创建、邀请、加入。
 - 实现基础后台 UI：登录、工作台、小组入口。
@@ -30,7 +30,7 @@
 - 前端能调用后端 `/api/v1/auth/me`。
 - 用户能登录。
 - 用户能创建小组并邀请成员。
-- OpenAPI 或接口文档能看到基础接口。
+- OpenAPI 文档能看到基础接口。
 
 ## 阶段 2：题库与飞书导入闭环
 
@@ -119,6 +119,7 @@
 包含：
 
 - 前后端接口联调。
+- OpenAPI 契约校验。
 - 关键链路端到端测试。
 - 错误日志和 requestId。
 - 敏感信息检查。
