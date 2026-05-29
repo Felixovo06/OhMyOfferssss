@@ -1,6 +1,7 @@
 import type { QuestionBank, Question } from "@/types/bank"
 import type { ImportBatch, ImportItem } from "@/types/import"
 import type { InterviewSession, InterviewQuestion, InterviewSummary, InterviewConfig } from "@/types/interview"
+import type { Resume } from "@/types/resume"
 
 function delay(ms = 400) {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -406,6 +407,8 @@ export const mockInterviewApi = {
       difficulty: config.difficulty,
       question_count: config.question_count,
       goal: config.goal,
+      mode: config.mode,
+      resume_id: config.resume_id,
       status: "pending",
       current_index: 0,
       total_questions: config.question_count,
@@ -526,5 +529,110 @@ export const mockInterviewApi = {
       ],
     }
     return summary
+  },
+}
+
+let resumeCounter = 1
+const mockResumes: Resume[] = [
+  {
+    id: "resume_1",
+    filename: "张三_前端工程师_简历.pdf",
+    status: "completed",
+    is_scanned: false,
+    summary: {
+      name: "张三",
+      email: "zhangsan@example.com",
+      phone: "138-0000-0000",
+      skills: ["JavaScript", "TypeScript", "React", "Vue.js", "Node.js", "Next.js", "CSS/Tailwind", "Webpack", "Git", "Docker"],
+      experience: [
+        {
+          company: "字节跳动",
+          title: "前端高级工程师",
+          start_date: "2022-03",
+          end_date: null,
+          description: "负责抖音电商平台前端架构设计，主导了商品详情页的性能优化（LCP 降低 40%）。带领 3 人小团队完成微前端架构迁移。",
+        },
+        {
+          company: "阿里巴巴",
+          title: "前端工程师",
+          start_date: "2019-07",
+          end_date: "2022-02",
+          description: "参与淘宝商家后台开发，负责订单管理和数据分析模块。使用 React + TypeScript 重构了遗留 jQuery 系统。",
+        },
+      ],
+      education: [
+        {
+          school: "浙江大学",
+          degree: "本科",
+          major: "计算机科学与技术",
+          start_date: "2015-09",
+          end_date: "2019-06",
+        },
+      ],
+      projects: [
+        {
+          name: "电商平台微前端改造",
+          description: "基于 Module Federation 实现微前端架构，支持多团队独立开发部署",
+          technologies: ["Webpack 5", "React", "Module Federation"],
+          highlights: ["首屏加载时间减少 35%", "团队发布效率提升 3 倍"],
+        },
+      ],
+      follow_up_directions: [
+        "React 性能优化经验（useMemo、React.memo、虚拟列表）",
+        "前端工程化和构建工具链（Webpack 配置、Vite 对比）",
+        "团队管理和跨部门协作经验",
+      ],
+    },
+    created_at: "2026-05-28T00:00:00Z",
+    updated_at: "2026-05-28T00:00:10Z",
+  },
+]
+
+export const mockResumeApi = {
+  getResumes: async () => {
+    await delay()
+    return [...mockResumes]
+  },
+  getResume: async (id: string) => {
+    await delay()
+    const resume = mockResumes.find((r) => r.id === id)
+    if (!resume) throw new Error("简历不存在")
+    return { ...resume, summary: resume.summary ? { ...resume.summary } : undefined }
+  },
+  uploadResume: async (file: File) => {
+    await delay(800)
+    const id = `resume_${++resumeCounter}`
+    const resume: Resume = {
+      id,
+      filename: file.name,
+      status: "parsing",
+      is_scanned: file.name.includes("scan") || file.name.includes("图片"),
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }
+    mockResumes.unshift(resume)
+
+    setTimeout(() => {
+      const r = mockResumes.find((x) => x.id === id)
+      if (r) {
+        r.status = "completed"
+        r.summary = {
+          name: "新候选人",
+          email: "candidate@example.com",
+          skills: ["JavaScript", "React", "Node.js"],
+          experience: [
+            { company: "某互联网公司", title: "前端工程师", start_date: "2021-01", end_date: null, description: "负责核心产品前端开发" },
+          ],
+          education: [
+            { school: "某大学", degree: "本科", major: "计算机相关专业", start_date: "2017-09", end_date: "2021-06" },
+          ],
+          projects: [],
+          follow_up_directions: ["深入前端框架原理", "系统设计能力"],
+        }
+        r.updated_at = new Date().toISOString()
+      }
+    }, 3000)
+
+    return resume
   },
 }

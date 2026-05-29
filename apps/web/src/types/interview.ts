@@ -4,6 +4,8 @@ export interface InterviewConfig {
   difficulty?: number
   question_count: number
   goal?: string
+  mode?: "normal" | "custom"
+  resume_id?: string
 }
 
 export interface InterviewSession {
@@ -13,6 +15,8 @@ export interface InterviewSession {
   difficulty?: number
   question_count: number
   goal?: string
+  mode?: "normal" | "custom"
+  resume_id?: string
   status: "pending" | "in_progress" | "completed"
   current_index: number
   total_questions: number

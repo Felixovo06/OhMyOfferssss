@@ -12,9 +12,11 @@ class ApiClient {
     this.tokenGetter = getter
   }
 
-  private getHeaders(): Record<string, string> {
+  private getHeaders(body?: unknown): Record<string, string> {
     const headers: Record<string, string> = {
-      "Content-Type": "application/json",
+    }
+    if (!(body instanceof FormData)) {
+      headers["Content-Type"] = "application/json"
     }
     const token = this.tokenGetter?.()
     if (token) {
@@ -31,8 +33,8 @@ class ApiClient {
     const url = `${this.baseUrl}${path}`
     const res = await fetch(url, {
       method,
-      headers: this.getHeaders(),
-      body: body ? JSON.stringify(body) : undefined,
+      headers: this.getHeaders(body),
+      body: body ? (body instanceof FormData ? body : JSON.stringify(body)) : undefined,
     })
 
     const json = await res.json()

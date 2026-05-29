@@ -3,6 +3,7 @@
 import { useParams, useRouter } from "next/navigation"
 import { useState } from "react"
 import { useSession, useStartSession, useSubmitAnswer, useNextQuestion } from "@/lib/query/interviews"
+import { useResume } from "@/lib/query/resumes"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
@@ -18,6 +19,7 @@ import {
   Trophy,
   Lightbulb,
   Target,
+  FileText,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -43,6 +45,8 @@ export default function InterviewPage() {
   const sessionId = params.id as string
 
   const { data, isLoading } = useSession(sessionId)
+  const resumeId = data?.session.resume_id ?? null
+  const { data: resume } = useResume(resumeId)
   const startSession = useStartSession()
   const submitAnswer = useSubmitAnswer()
   const nextQuestion = useNextQuestion()
@@ -94,6 +98,19 @@ export default function InterviewPage() {
               <div>
                 <p className="text-xs font-medium text-muted-foreground">面试目标</p>
                 <p className="mt-0.5 text-sm">{session.goal}</p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Resume context in review */}
+        {resume?.status === "completed" && resume.summary && (
+          <Card className="border-primary/30 bg-primary/[0.03]">
+            <CardContent className="flex items-start gap-3 p-4">
+              <FileText className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-medium text-muted-foreground">简历上下文</p>
+                <p className="mt-0.5 text-sm">{resume.summary.name} · {resume.summary.skills.slice(0, 5).join("、")}</p>
               </div>
             </CardContent>
           </Card>
@@ -225,11 +242,12 @@ export default function InterviewPage() {
               {questions?.filter((q) => q.status === "answered").length || 0} 题已答
             </span>
           </div>
-          <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-muted">
+          <div className="mt-1 h-2 overflow-hidden rounded-full bg-muted">
             <div
-              className="h-full rounded-full bg-primary transition-all"
+              className="h-full rounded-full transition-all duration-500 ease-out"
               style={{
                 width: `${((session.current_index + (showFeedback ? 1 : 0)) / session.total_questions) * 100}%`,
+                background: "linear-gradient(90deg, hsl(var(--primary)), hsl(var(--primary) / 0.7))",
               }}
             />
           </div>

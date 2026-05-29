@@ -25,6 +25,7 @@ class InterviewRepository:
                 .selectinload(InterviewItem.question)
                 .selectinload(Question.tags)
                 .selectinload(QuestionTag.tag),
+                selectinload(InterviewSession.resume),
             )
             .where(InterviewSession.id == session_id)
         )
@@ -35,6 +36,7 @@ class InterviewRepository:
             select(InterviewItem)
             .options(
                 selectinload(InterviewItem.session),
+                selectinload(InterviewItem.session).selectinload(InterviewSession.resume),
                 selectinload(InterviewItem.question)
                 .selectinload(Question.tags)
                 .selectinload(QuestionTag.tag),
@@ -48,14 +50,18 @@ class InterviewRepository:
         user_id: str,
         title: str,
         target: str | None,
+        resume_id: str | None,
+        mode: str,
         config_json: dict,
         strategy: str,
         selection_reason: str,
     ) -> InterviewSession:
         session = InterviewSession(
             created_by_id=user_id,
+            resume_id=resume_id,
             title=title,
             target=target,
+            mode=mode,
             config_json=config_json,
             strategy=strategy,
             selection_reason=selection_reason,
@@ -81,4 +87,3 @@ class InterviewRepository:
         self.db.add(item)
         self.db.flush()
         return item
-

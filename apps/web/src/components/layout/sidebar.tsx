@@ -10,6 +10,7 @@ import {
   Users,
   BookOpen,
   FileInput,
+  FileText,
   LogOut,
   ChevronRight,
   Sparkles,
@@ -23,6 +24,7 @@ import { useState } from "react"
 const navItems = [
   { href: "/dashboard", label: "工作台", icon: LayoutDashboard },
   { href: "/interviews", label: "面试", icon: MessageSquare },
+  { href: "/resumes", label: "简历", icon: FileText },
   { href: "/groups", label: "小组", icon: Users },
   { href: "/banks", label: "题库", icon: BookOpen },
   { href: "/imports", label: "飞书导入", icon: FileInput },

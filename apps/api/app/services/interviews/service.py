@@ -9,6 +9,7 @@ from app.db.repositories.interviews import InterviewRepository
 from app.schemas.interviews import InterviewAnswerCreate, InterviewCreate
 from app.services.question_banks.service import QuestionBankService
 from app.services.questions.service import QuestionService
+from app.services.resumes.service import ResumeService
 
 
 class InterviewService:
@@ -17,6 +18,7 @@ class InterviewService:
         self.interviews = InterviewRepository(db)
         self.banks = QuestionBankService(db)
         self.questions = QuestionService(db)
+        self.resumes = ResumeService(db)
         self.llm = LLMClient()
 
     def list_sessions(self, user: User) -> list[InterviewSession]:
@@ -31,6 +33,15 @@ class InterviewService:
         return session
 
     def create_session(self, user: User, payload: InterviewCreate) -> InterviewSession:
+        resume = self.resumes.get_resume(user, payload.resume_id) if payload.resume_id else None
+        mode = payload.mode or ("custom" if resume else "normal")
+        if mode == "custom" and resume is None:
+            raise AppError("RESUME_REQUIRED", "客制化面试需要选择简历", status_code=422)
+        target = payload.target or payload.goal
+        llm_target = self._target_with_resume_context(
+            target,
+            resume.summary_json if resume else None,
+        )
         candidates = self._candidate_questions(user, payload)
         if len(candidates) < payload.question_count:
             raise AppError(
@@ -53,7 +64,7 @@ class InterviewService:
                 for question in candidates
             ],
             question_count=payload.question_count,
-            target=payload.target,
+            target=llm_target,
         )
         candidate_by_id = {question.id: question for question in candidates}
         selected_ids = [
@@ -72,7 +83,9 @@ class InterviewService:
         session = self.interviews.create_session(
             user.id,
             title,
-            payload.target,
+            target,
+            resume.id if resume else None,
+            mode,
             payload.model_dump(),
             selection.strategy,
             selection.reason,
@@ -104,7 +117,10 @@ class InterviewService:
             question=item.question.question,
             reference_answer=item.question.answer,
             user_answer=payload.answer,
-            target=item.session.target,
+            target=self._target_with_resume_context(
+                item.session.target,
+                item.session.resume.summary_json if item.session.resume else None,
+            ),
         )
         item.answer = payload.answer
         item.feedback_json = feedback.model_dump()
@@ -172,5 +188,19 @@ class InterviewService:
         return candidates
 
     def _default_title(self, payload: InterviewCreate) -> str:
-        target = f" - {payload.target}" if payload.target else ""
-        return f"普通面试{target}"
+        target = payload.target or payload.goal
+        suffix = f" - {target}" if target else ""
+        interview_type = "客制化" if payload.mode == "custom" or payload.resume_id else "普通"
+        return f"{interview_type}面试{suffix}"
+
+    def _target_with_resume_context(self, target: str | None, summary: dict | None) -> str | None:
+        if not summary:
+            return target
+        skills = "、".join(summary.get("skills") or [])
+        directions = "；".join(summary.get("follow_up_directions") or [])
+        parts = [target or "客制化面试"]
+        if skills:
+            parts.append(f"候选人技能：{skills}")
+        if directions:
+            parts.append(f"简历追问方向：{directions}")
+        return "。".join(parts)

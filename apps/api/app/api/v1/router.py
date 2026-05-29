@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.v1 import auth, groups, imports, interviews, question_banks, questions
+from app.api.v1 import auth, groups, imports, interviews, question_banks, questions, resumes
 
 api_router = APIRouter()
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
@@ -9,3 +9,4 @@ api_router.include_router(question_banks.router, tags=["question-banks"])
 api_router.include_router(questions.router, tags=["questions"])
 api_router.include_router(imports.router, tags=["imports"])
 api_router.include_router(interviews.router, tags=["interviews"])
+api_router.include_router(resumes.router, tags=["resumes"])

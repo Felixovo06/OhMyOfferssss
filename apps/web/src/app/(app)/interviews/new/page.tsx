@@ -1,12 +1,14 @@
 "use client"
 
 import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { useBanks } from "@/lib/query/banks"
 import { useCreateSession } from "@/lib/query/interviews"
+import { useResume } from "@/lib/query/resumes"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Separator } from "@/components/ui/separator"
@@ -23,6 +25,7 @@ import {
   ArrowLeft,
   Check,
   BookOpen,
+  FileText,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -36,7 +39,10 @@ const difficultyLabels: Record<number, string> = {
 
 export default function NewInterviewPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const resumeId = searchParams.get("resume_id")
   const { data: banks, isLoading: banksLoading } = useBanks()
+  const { data: resume } = useResume(resumeId ?? null)
   const createSession = useCreateSession()
 
   const [selectedBankIds, setSelectedBankIds] = useState<string[]>([])
@@ -66,6 +72,8 @@ export default function NewInterviewPage() {
         difficulty: difficulty ? Number(difficulty) : undefined,
         question_count: Number(questionCount),
         goal: goal || undefined,
+        mode: resumeId ? "custom" : "normal",
+        resume_id: resumeId || undefined,
       },
       {
         onSuccess: (session) => {
@@ -92,14 +100,55 @@ export default function NewInterviewPage() {
         </p>
       </div>
 
+      {/* Resume context */}
+      {resumeId && resume?.status === "completed" && resume.summary && (
+        <Card className="border-primary/30 bg-primary/[0.03]">
+          <CardContent className="flex items-start gap-4 p-4">
+            <FileText className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+            <div className="min-w-0 flex-1 space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium">简历已关联 · 客制化面试</p>
+                <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                  {resume.filename}
+                </Badge>
+              </div>
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                <span>{resume.summary.name}</span>
+                <span>{resume.summary.email}</span>
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {resume.summary.skills.slice(0, 8).map((s) => (
+                  <Badge key={s} variant="secondary" className="text-[10px]">
+                    {s}
+                  </Badge>
+                ))}
+                {resume.summary.skills.length > 8 && (
+                  <Badge variant="outline" className="text-[10px]">
+                    +{resume.summary.skills.length - 8}
+                  </Badge>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Separator />
 
       {/* Select Banks */}
       <section className="space-y-3">
         <h2 className="text-sm font-medium">选择题库</h2>
         {banksLoading ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          <div className="grid gap-2 sm:grid-cols-2">
+            {[1, 2].map((i) => (
+              <div key={i} className="flex items-start gap-3 rounded-lg border p-3">
+                <Skeleton className="mt-0.5 h-4 w-4 shrink-0" />
+                <div className="min-w-0 flex-1 space-y-1.5">
+                  <Skeleton className="h-4 w-32" />
+                  <Skeleton className="h-3 w-48" />
+                </div>
+              </div>
+            ))}
           </div>
         ) : banks && banks.length > 0 ? (
           <div className="grid gap-2 sm:grid-cols-2">
@@ -110,10 +159,10 @@ export default function NewInterviewPage() {
                   key={bank.id}
                   type="button"
                   onClick={() => toggleBank(bank.id)}
-                  className={`flex items-start gap-3 rounded-lg border p-3 text-left transition-colors ${
+                  className={`flex items-start gap-3 rounded-lg border p-3 text-left transition-all ${
                     selected
                       ? "border-primary bg-primary/5"
-                      : "hover:bg-accent/50"
+                      : "hover:bg-accent/50 hover:border-foreground/20"
                   }`}
                 >
                   <div

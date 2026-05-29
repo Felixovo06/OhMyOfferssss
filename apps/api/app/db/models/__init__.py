@@ -256,6 +256,7 @@ class InterviewSession(Base, TimestampMixin):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
     created_by_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True, nullable=False)
+    resume_id: Mapped[str | None] = mapped_column(ForeignKey("resumes.id"), index=True)
     title: Mapped[str] = mapped_column(String(160), nullable=False)
     mode: Mapped[str] = mapped_column(String(30), nullable=False, default="normal")
     target: Mapped[str | None] = mapped_column(String(300))
@@ -271,6 +272,7 @@ class InterviewSession(Base, TimestampMixin):
         cascade="all, delete-orphan",
         order_by="InterviewItem.position",
     )
+    resume: Mapped["Resume | None"] = relationship()
 
 
 class InterviewItem(Base, TimestampMixin):
@@ -292,3 +294,18 @@ class InterviewItem(Base, TimestampMixin):
 
     session: Mapped[InterviewSession] = relationship(back_populates="items")
     question: Mapped[Question] = relationship()
+
+
+class Resume(Base, TimestampMixin):
+    __tablename__ = "resumes"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    created_by_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True, nullable=False)
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    content_type: Mapped[str | None] = mapped_column(String(120))
+    file_size: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    raw_text: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    status: Mapped[str] = mapped_column(String(30), nullable=False, default="parsing")
+    is_scanned: Mapped[bool | None] = mapped_column(Boolean)
+    error_message: Mapped[str | None] = mapped_column(Text)
+    summary_json: Mapped[dict | None] = mapped_column(JSON)
