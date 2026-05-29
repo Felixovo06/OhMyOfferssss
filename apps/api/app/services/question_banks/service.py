@@ -1,7 +1,8 @@
+from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
 from app.core.errors import AppError
-from app.db.models import QuestionBank, User
+from app.db.models import ImportBatch, ImportItem, Question, QuestionBank, QuestionTag, User
 from app.db.repositories.groups import GroupRepository
 from app.db.repositories.question_banks import QuestionBankRepository
 from app.schemas.question_banks import QuestionBankCreate, QuestionBankUpdate
@@ -62,7 +63,39 @@ class QuestionBankService:
     def delete_bank(self, user: User, bank_id: str) -> None:
         bank = self.get_accessible_bank(user, bank_id)
         self._require_bank_owner(user, bank)
-        self.db.delete(bank)
+        question_ids = select(Question.id).where(Question.bank_id == bank.id)
+        batch_ids = select(ImportBatch.id).where(ImportBatch.bank_id == bank.id)
+        self.db.execute(
+            update(ImportItem)
+            .where(ImportItem.confirmed_question_id.in_(question_ids))
+            .values(confirmed_question_id=None)
+            .execution_options(synchronize_session=False),
+        )
+        self.db.execute(
+            delete(ImportItem)
+            .where(ImportItem.batch_id.in_(batch_ids))
+            .execution_options(synchronize_session=False),
+        )
+        self.db.execute(
+            delete(ImportBatch)
+            .where(ImportBatch.bank_id == bank.id)
+            .execution_options(synchronize_session=False),
+        )
+        self.db.execute(
+            delete(QuestionTag)
+            .where(QuestionTag.question_id.in_(question_ids))
+            .execution_options(synchronize_session=False),
+        )
+        self.db.execute(
+            delete(Question)
+            .where(Question.bank_id == bank.id)
+            .execution_options(synchronize_session=False),
+        )
+        self.db.execute(
+            delete(QuestionBank)
+            .where(QuestionBank.id == bank.id)
+            .execution_options(synchronize_session=False),
+        )
         self.db.commit()
 
     def _can_access(self, user: User, bank: QuestionBank) -> bool:

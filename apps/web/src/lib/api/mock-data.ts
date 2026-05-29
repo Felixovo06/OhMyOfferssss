@@ -377,6 +377,19 @@ export const mockImportApi = {
     }
     throw new Error("导入项不存在")
   },
+  rejectAll: async (batchId: string) => {
+    await delay()
+    const items = mockImportItems[batchId]
+    if (!items) throw new Error("导入批次不存在")
+    let rejectedCount = 0
+    items.forEach((i) => {
+      if (i.status === "pending") {
+        i.status = "rejected"
+        rejectedCount += 1
+      }
+    })
+    return { rejected_count: rejectedCount }
+  },
   confirmAll: async (batchId: string) => {
     await delay()
     const items = mockImportItems[batchId]

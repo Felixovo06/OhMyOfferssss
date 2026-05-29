@@ -37,6 +37,13 @@ class InterviewSummary(BaseModel):
 
 class InterviewAnswerCreate(BaseModel):
     answer: str = Field(min_length=1)
+    difficulty: int | None = Field(default=None, ge=0, le=100)
+    difficulty_score: int | None = Field(default=None, ge=0, le=100)
+
+
+class InterviewDifficultyUpdate(BaseModel):
+    difficulty: int | None = Field(default=None, ge=0, le=100)
+    difficulty_score: int | None = Field(default=None, ge=0, le=100)
 
 
 class InterviewItemOut(BaseModel):

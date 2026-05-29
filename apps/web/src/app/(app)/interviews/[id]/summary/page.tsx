@@ -18,14 +18,6 @@ import {
   Target,
 } from "lucide-react"
 
-const difficultyLabels: Record<number, string> = {
-  1: "简单",
-  2: "较易",
-  3: "中等",
-  4: "较难",
-  5: "困难",
-}
-
 export default function SummaryPage() {
   const params = useParams()
   const router = useRouter()

@@ -21,11 +21,23 @@ export function startSession(id: string) {
   return api.post<InterviewSession>(`/api/v1/interviews/${id}/start`)
 }
 
-export function submitAnswer(sessionId: string, questionId: string, answer: string) {
+export function submitAnswer(
+  sessionId: string,
+  questionId: string,
+  answer: string,
+  difficulty?: number | null,
+) {
   if (USE_MOCK) return mockInterviewApi.submitAnswer(sessionId, questionId, answer)
   return api.post<InterviewQuestion>(
-    `/api/v1/interviews/${sessionId}/answer`,
-    { question_id: questionId, answer },
+    `/api/v1/interviews/items/${questionId}/answer`,
+    { answer, difficulty },
+  )
+}
+
+export function updateQuestionDifficulty(questionId: string, difficulty?: number | null) {
+  return api.patch<InterviewQuestion>(
+    `/api/v1/interviews/items/${questionId}/difficulty`,
+    { difficulty },
   )
 }
 

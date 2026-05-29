@@ -31,7 +31,7 @@ export interface InterviewQuestion {
   index: number
   content: string
   tags: string[]
-  difficulty: number
+  difficulty?: number | null
   ai_reason?: string
   status: "pending" | "answered" | "skipped"
   score?: number

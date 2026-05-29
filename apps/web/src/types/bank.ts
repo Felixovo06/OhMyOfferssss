@@ -22,7 +22,7 @@ export interface Question {
   content: string
   answer?: string
   tags: string[]
-  difficulty: number
+  difficulty?: number | null
   status: "active" | "disabled"
   source?: string
   created_at: string

@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Skeleton } from "@/components/ui/skeleton"
 import {
   Dialog,
   DialogContent,
@@ -33,7 +34,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
-import { Users, Plus, Loader2 } from "lucide-react"
+import { Users, Plus, AlertCircle } from "lucide-react"
 import { toast } from "sonner"
 
 const createGroupSchema = z.object({
@@ -44,7 +45,7 @@ const createGroupSchema = z.object({
 type CreateGroupForm = z.infer<typeof createGroupSchema>
 
 export default function GroupsPage() {
-  const { data: groups, isLoading } = useGroups()
+  const { data: groups, isLoading, error, refetch } = useGroups()
   const createGroup = useCreateGroup()
   const [open, setOpen] = useState(false)
 
@@ -137,8 +138,30 @@ export default function GroupsPage() {
       </div>
 
       {isLoading ? (
-        <div className="flex items-center justify-center py-16">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {[1, 2, 3].map((i) => (
+            <Card key={i}>
+              <CardHeader>
+                <div className="flex items-start justify-between">
+                  <Skeleton className="h-5 w-32" />
+                  <Skeleton className="h-5 w-12 rounded-full" />
+                </div>
+                <Skeleton className="mt-2 h-4 w-48" />
+              </CardHeader>
+              <CardContent>
+                <Skeleton className="h-3 w-24" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : error ? (
+        <div className="flex flex-col items-center gap-4 py-16 text-center">
+          <AlertCircle className="h-12 w-12 text-red-500/50" />
+          <div>
+            <p className="text-lg font-medium">加载失败</p>
+            <p className="text-sm text-muted-foreground">{error.message || "请稍后重试"}</p>
+          </div>
+          <Button variant="outline" onClick={() => refetch()}>重试</Button>
         </div>
       ) : groups && groups.length > 0 ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

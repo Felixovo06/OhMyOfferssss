@@ -7,8 +7,17 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.api.deps import get_db
+from app.core.config import get_settings
 from app.db.models import Base
 from app.main import create_app
+
+
+@pytest.fixture(autouse=True)
+def isolate_external_integrations(monkeypatch) -> None:
+    settings = get_settings()
+    monkeypatch.setattr(settings, "environment", "test")
+    monkeypatch.setattr(settings, "llm_api_key", None)
+    monkeypatch.setattr(settings, "llm_base_url", None)
 
 
 @pytest.fixture

@@ -2,7 +2,14 @@ export interface ImportBatch {
   id: string
   bank_id?: string
   source_url: string
-  status: "pending" | "processing" | "completed" | "failed"
+  status:
+    | "pending"
+    | "processing"
+    | "pending_confirmation"
+    | "confirming"
+    | "confirmed"
+    | "completed"
+    | "failed"
   total_count: number
   confirmed_count: number
   error_message?: string
@@ -17,6 +24,8 @@ export interface ImportItem {
   question_answer?: string
   tags: string[]
   difficulty: number
+  difficulty_score?: number
+  difficulty_label?: "easy" | "medium" | "hard" | string
   status: "pending" | "confirmed" | "rejected"
   confidence: number
 }

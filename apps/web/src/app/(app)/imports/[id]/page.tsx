@@ -1,12 +1,26 @@
 "use client"
 
 import { useParams, useRouter } from "next/navigation"
-import { useImportDetail, useConfirmImportItem, useRejectImportItem, useConfirmAllImportItems } from "@/lib/query/imports"
-import { useAuthStore } from "@/lib/store/auth"
+import { useState } from "react"
+import {
+  useImportDetail,
+  useConfirmImportItem,
+  useRejectImportItem,
+  useConfirmAllImportItems,
+  useRejectAllImportItems,
+} from "@/lib/query/imports"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import {
   ArrowLeft,
   Loader2,
@@ -20,12 +34,10 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 
-const difficultyLabels: Record<number, string> = {
-  1: "简单",
-  2: "较易",
-  3: "中等",
-  4: "较难",
-  5: "困难",
+const difficultyLabels: Record<string, string> = {
+  easy: "简单",
+  medium: "中等",
+  hard: "困难",
 }
 
 const statusIcons: Record<string, typeof CheckCircle> = {
@@ -48,7 +60,10 @@ const statusColors: Record<string, string> = {
 
 const batchStatusConfig: Record<string, { label: string; icon: typeof Clock; color: string }> = {
   pending: { label: "等待处理", icon: Clock, color: "text-muted-foreground" },
-  processing: { label: "正在导入", icon: LoaderPinwheel, color: "text-blue-500" },
+  processing: { label: "提取中", icon: LoaderPinwheel, color: "text-blue-500" },
+  pending_confirmation: { label: "待确认入库", icon: Clock, color: "text-yellow-600" },
+  confirming: { label: "入库中", icon: LoaderPinwheel, color: "text-blue-500" },
+  confirmed: { label: "已入库", icon: CheckCircle, color: "text-green-500" },
   completed: { label: "导入完成", icon: CheckCircle, color: "text-green-500" },
   failed: { label: "导入失败", icon: AlertCircle, color: "text-red-500" },
 }
@@ -62,6 +77,7 @@ export default function ImportDetailPage() {
   const confirmItem = useConfirmImportItem()
   const rejectItem = useRejectImportItem()
   const confirmAll = useConfirmAllImportItems()
+  const rejectAll = useRejectAllImportItems()
 
   const batch = data?.batch
   const items = data?.items || []
@@ -69,14 +85,16 @@ export default function ImportDetailPage() {
   const pendingItems = items.filter((i) => i.status === "pending")
   const hasPending = pendingItems.length > 0
 
+  const [rejectId, setRejectId] = useState<string | null>(null)
+  const [showConfirmAll, setShowConfirmAll] = useState(false)
+  const [showRejectAll, setShowRejectAll] = useState(false)
+
   function handleConfirmAll() {
-    confirmAll.mutate(batchId, {
-      onSuccess: () => toast.success("已确认所有待入库题目"),
-      onError: (err) => toast.error(err.message || "批量确认失败"),
-    })
+    setShowConfirmAll(true)
   }
 
   return (
+    <>
     <div className="space-y-6 p-6">
       {/* Back */}
       <Button variant="ghost" size="sm" onClick={() => router.push("/imports")}>
@@ -111,7 +129,7 @@ export default function ImportDetailPage() {
                   const Icon = config.icon
                   return (
                     <Badge variant="outline" className={config.color}>
-                      <Icon className={`mr-1 h-3 w-3 ${batch.status === "processing" ? "animate-spin" : ""}`} />
+                      <Icon className={`mr-1 h-3 w-3 ${["processing", "confirming"].includes(batch.status) ? "animate-spin" : ""}`} />
                       {config.label}
                     </Badge>
                   )
@@ -126,10 +144,20 @@ export default function ImportDetailPage() {
             </div>
             <div className="flex items-center gap-2">
               {hasPending && (
-                <Button onClick={handleConfirmAll} disabled={confirmAll.isPending}>
-                  <CheckSquare className="mr-1 h-4 w-4" />
-                  全部确认入库
-                </Button>
+                <>
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowRejectAll(true)}
+                    disabled={rejectAll.isPending}
+                  >
+                    <XCircle className="mr-1 h-4 w-4" />
+                    批量删除
+                  </Button>
+                  <Button onClick={handleConfirmAll} disabled={confirmAll.isPending}>
+                    <CheckSquare className="mr-1 h-4 w-4" />
+                    全部确认入库
+                  </Button>
+                </>
               )}
             </div>
           </div>
@@ -190,7 +218,7 @@ export default function ImportDetailPage() {
                           )}
                           <div className="mt-2 flex flex-wrap items-center gap-2">
                             <span className="rounded bg-yellow-100 px-1.5 py-0.5 text-[11px] font-medium text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">
-                              {difficultyLabels[item.difficulty] || item.difficulty}
+                              {difficultyLabels[item.difficulty_label || ""] || item.difficulty_label || "难度"} · {item.difficulty_score ?? item.difficulty}
                             </span>
                             {item.tags.map((tag) => (
                               <Badge key={tag} variant="outline" className="text-[10px]">
@@ -230,12 +258,7 @@ export default function ImportDetailPage() {
                                 variant="outline"
                                 size="sm"
                                 className="h-7 px-2 text-xs text-red-500 hover:text-red-600"
-                                onClick={() =>
-                                  rejectItem.mutate(item.id, {
-                                    onSuccess: () => toast.success("已拒绝"),
-                                    onError: (err) => toast.error(err.message || "操作失败"),
-                                  })
-                                }
+                                onClick={() => setRejectId(item.id)}
                                 disabled={rejectItem.isPending}
                               >
                                 拒绝
@@ -253,5 +276,110 @@ export default function ImportDetailPage() {
         </>
       )}
     </div>
+
+      {/* Reject confirmation */}
+      <Dialog open={!!rejectId} onOpenChange={(o) => !o && setRejectId(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>确认拒绝</DialogTitle>
+            <DialogDescription>拒绝后该题目将从导入列表中移除，此操作不可撤销。</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRejectId(null)}>
+              取消
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={rejectItem.isPending}
+              onClick={() => {
+                if (rejectId) {
+                  rejectItem.mutate(rejectId, {
+                    onSuccess: () => {
+                      toast.success("已拒绝")
+                      setRejectId(null)
+                    },
+                    onError: (err) => {
+                      toast.error(err.message || "操作失败")
+                      setRejectId(null)
+                    },
+                  })
+                }
+              }}
+            >
+              {rejectItem.isPending ? "拒绝中..." : "确认拒绝"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirm all dialog */}
+      <Dialog open={showConfirmAll} onOpenChange={setShowConfirmAll}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>全部确认入库</DialogTitle>
+            <DialogDescription>
+              确定将 {pendingItems.length} 道待确认题目全部入库吗？
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowConfirmAll(false)}>
+              取消
+            </Button>
+            <Button
+              disabled={confirmAll.isPending}
+              onClick={() => {
+                confirmAll.mutate(batchId, {
+                  onSuccess: () => {
+                    toast.success("已开始入库，稍后自动刷新状态")
+                    setShowConfirmAll(false)
+                  },
+                  onError: (err) => {
+                    toast.error(err.message || "批量确认失败")
+                    setShowConfirmAll(false)
+                  },
+                })
+              }}
+            >
+              {confirmAll.isPending ? "确认中..." : "确认入库"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reject all dialog */}
+      <Dialog open={showRejectAll} onOpenChange={setShowRejectAll}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>批量删除待确认题</DialogTitle>
+            <DialogDescription>
+              确定删除 {pendingItems.length} 道待确认题目吗？已确认入库的题目不会受影响。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowRejectAll(false)}>
+              取消
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={rejectAll.isPending}
+              onClick={() => {
+                rejectAll.mutate(batchId, {
+                  onSuccess: (data) => {
+                    toast.success(`已删除 ${data.rejected_count} 道待确认题`)
+                    setShowRejectAll(false)
+                  },
+                  onError: (err) => {
+                    toast.error(err.message || "批量删除失败")
+                    setShowRejectAll(false)
+                  },
+                })
+              }}
+            >
+              {rejectAll.isPending ? "删除中..." : "确认删除"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }

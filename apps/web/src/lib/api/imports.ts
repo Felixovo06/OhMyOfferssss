@@ -29,6 +29,11 @@ export function rejectImportItem(itemId: string) {
   return api.post<void>(`/api/v1/imports/items/${itemId}/reject`)
 }
 
+export function rejectAllImportItems(batchId: string) {
+  if (USE_MOCK) return mockImportApi.rejectAll(batchId)
+  return api.post<{ rejected_count: number }>(`/api/v1/imports/${batchId}/reject`)
+}
+
 export function confirmAllImportItems(batchId: string) {
   if (USE_MOCK) return mockImportApi.confirmAll(batchId)
   return api.post<void>(`/api/v1/imports/${batchId}/confirm`)

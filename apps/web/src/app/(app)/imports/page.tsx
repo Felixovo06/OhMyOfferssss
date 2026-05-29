@@ -15,13 +15,6 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card"
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -35,7 +28,10 @@ import { toast } from "sonner"
 
 const statusConfig: Record<string, { label: string; icon: typeof Clock; color: string }> = {
   pending: { label: "等待处理", icon: Clock, color: "text-muted-foreground" },
-  processing: { label: "正在导入", icon: LoaderPinwheel, color: "text-blue-500" },
+  processing: { label: "提取中", icon: LoaderPinwheel, color: "text-blue-500" },
+  pending_confirmation: { label: "待确认入库", icon: Clock, color: "text-yellow-600" },
+  confirming: { label: "入库中", icon: LoaderPinwheel, color: "text-blue-500" },
+  confirmed: { label: "已入库", icon: CheckCircle, color: "text-green-500" },
   completed: { label: "导入完成", icon: CheckCircle, color: "text-green-500" },
   failed: { label: "导入失败", icon: AlertCircle, color: "text-red-500" },
 }
@@ -155,7 +151,7 @@ export default function ImportsPage() {
                   className="flex cursor-pointer items-center gap-4 rounded-lg border p-4 transition-colors hover:bg-accent/50"
                 >
                   <div className={config.color}>
-                    <Icon className={`h-5 w-5 ${batch.status === "processing" ? "animate-spin" : ""}`} />
+                    <Icon className={`h-5 w-5 ${["processing", "confirming"].includes(batch.status) ? "animate-spin" : ""}`} />
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">{batch.source_url}</p>

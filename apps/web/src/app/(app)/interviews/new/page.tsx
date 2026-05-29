@@ -4,7 +4,7 @@ import { useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useBanks } from "@/lib/query/banks"
 import { useCreateSession } from "@/lib/query/interviews"
-import { useResume } from "@/lib/query/resumes"
+import { useResume, useResumes, useUploadResume } from "@/lib/query/resumes"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
@@ -26,6 +26,7 @@ import {
   Check,
   BookOpen,
   FileText,
+  AlertCircle,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -41,39 +42,59 @@ export default function NewInterviewPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const resumeId = searchParams.get("resume_id")
-  const { data: banks, isLoading: banksLoading } = useBanks()
-  const { data: resume } = useResume(resumeId ?? null)
+  const { data: banks, isLoading: banksLoading, error: banksError, refetch: refetchBanks } = useBanks()
+  const { data: resumes } = useResumes()
   const createSession = useCreateSession()
+  const uploadResume = useUploadResume()
 
   const [selectedBankIds, setSelectedBankIds] = useState<string[]>([])
+  const [bankSelectionTouched, setBankSelectionTouched] = useState(false)
+  const [mode, setMode] = useState<"normal" | "custom">(resumeId ? "custom" : "normal")
+  const [selectedResumeId, setSelectedResumeId] = useState<string>(resumeId || "")
   const [selectedTags, setSelectedTags] = useState<string>("")
   const [difficulty, setDifficulty] = useState<string>("")
   const [questionCount, setQuestionCount] = useState("5")
   const [goal, setGoal] = useState("")
+  const { data: resume } = useResume(mode === "custom" && selectedResumeId ? selectedResumeId : null)
+
+  const activeBankIds = bankSelectionTouched
+    ? selectedBankIds
+    : banks?.map((bank) => bank.id) ?? []
 
   function toggleBank(bankId: string) {
-    setSelectedBankIds((prev) =>
-      prev.includes(bankId) ? prev.filter((id) => id !== bankId) : [...prev, bankId],
+    setBankSelectionTouched(true)
+    setSelectedBankIds(
+      activeBankIds.includes(bankId)
+        ? activeBankIds.filter((id) => id !== bankId)
+        : [...activeBankIds, bankId],
     )
   }
 
   function handleStart() {
-    if (selectedBankIds.length === 0) {
+    if (activeBankIds.length === 0) {
       toast.error("请至少选择一个题库")
+      return
+    }
+    if (mode === "custom" && !selectedResumeId) {
+      toast.error("真实面试模拟需要先选择或上传一份简历")
+      return
+    }
+    if (mode === "custom" && resume?.status === "failed") {
+      toast.error(resume.error_message || "这份简历解析失败，请换一份")
       return
     }
 
     createSession.mutate(
       {
-        bank_ids: selectedBankIds,
+        bank_ids: activeBankIds,
         tags: selectedTags
           ? selectedTags.split(/[,，\s]+/).filter(Boolean)
           : undefined,
         difficulty: difficulty ? Number(difficulty) : undefined,
         question_count: Number(questionCount),
         goal: goal || undefined,
-        mode: resumeId ? "custom" : "normal",
-        resume_id: resumeId || undefined,
+        mode,
+        resume_id: mode === "custom" ? selectedResumeId : undefined,
       },
       {
         onSuccess: (session) => {
@@ -84,6 +105,17 @@ export default function NewInterviewPage() {
         },
       },
     )
+  }
+
+  function handleResumeUpload(file: File | undefined) {
+    if (!file) return
+    uploadResume.mutate(file, {
+      onSuccess: (uploaded) => {
+        setMode("custom")
+        setSelectedResumeId(uploaded.id)
+        toast.success("简历已上传")
+      },
+    })
   }
 
   return (
@@ -100,40 +132,109 @@ export default function NewInterviewPage() {
         </p>
       </div>
 
-      {/* Resume context */}
-      {resumeId && resume?.status === "completed" && resume.summary && (
-        <Card className="border-primary/30 bg-primary/[0.03]">
-          <CardContent className="flex items-start gap-4 p-4">
-            <FileText className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
-            <div className="min-w-0 flex-1 space-y-2">
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-medium">简历已关联 · 客制化面试</p>
-                <Badge variant="outline" className="text-[10px] text-muted-foreground">
-                  {resume.filename}
-                </Badge>
-              </div>
-              <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                <span>{resume.summary.name}</span>
-                <span>{resume.summary.email}</span>
-              </div>
-              <div className="flex flex-wrap gap-1">
-                {resume.summary.skills.slice(0, 8).map((s) => (
-                  <Badge key={s} variant="secondary" className="text-[10px]">
-                    {s}
-                  </Badge>
-                ))}
-                {resume.summary.skills.length > 8 && (
-                  <Badge variant="outline" className="text-[10px]">
-                    +{resume.summary.skills.length - 8}
-                  </Badge>
-                )}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
       <Separator />
+
+      <section className="space-y-3">
+        <h2 className="text-sm font-medium">面试模式</h2>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <button
+            type="button"
+            onClick={() => setMode("normal")}
+            className={`rounded-lg border p-3 text-left transition-all ${
+              mode === "normal" ? "border-primary bg-primary/5" : "hover:bg-accent/50"
+            }`}
+          >
+            <p className="text-sm font-medium">普通抽选</p>
+            <p className="mt-1 text-xs text-muted-foreground">按题库、标签和难度抽题练习</p>
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode("custom")}
+            className={`rounded-lg border p-3 text-left transition-all ${
+              mode === "custom" ? "border-primary bg-primary/5" : "hover:bg-accent/50"
+            }`}
+          >
+            <p className="text-sm font-medium">真实面试模拟</p>
+            <p className="mt-1 text-xs text-muted-foreground">结合简历技能和经历生成追问方向</p>
+          </button>
+        </div>
+      </section>
+
+      {mode === "custom" && (
+        <section className="space-y-3">
+          <h2 className="text-sm font-medium">选择简历</h2>
+          <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+            <Select value={selectedResumeId} onValueChange={(value) => setSelectedResumeId(value || "")}>
+              <SelectTrigger>
+                <SelectValue placeholder="选择已有简历" />
+              </SelectTrigger>
+              <SelectContent>
+                {resumes?.map((item) => (
+                  <SelectItem key={item.id} value={item.id}>
+                    {item.filename}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div>
+              <input
+                id="interview-resume-upload"
+                type="file"
+                className="hidden"
+                accept=".txt,.md,.pdf,text/plain,application/pdf"
+                onChange={(event) => handleResumeUpload(event.target.files?.[0])}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                disabled={uploadResume.isPending}
+                onClick={() => document.getElementById("interview-resume-upload")?.click()}
+              >
+                {uploadResume.isPending ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <FileText className="mr-2 h-4 w-4" />
+                )}
+                上传新简历
+              </Button>
+            </div>
+          </div>
+          {selectedResumeId && resume?.status === "completed" && resume.summary && (
+            <Card className="border-primary/30 bg-primary/[0.03]">
+              <CardContent className="flex items-start gap-4 p-4">
+                <FileText className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+                <div className="min-w-0 flex-1 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium">简历已关联</p>
+                    <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                      {resume.filename}
+                    </Badge>
+                  </div>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                    <span>{resume.summary.name}</span>
+                    <span>{resume.summary.email}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {resume.summary.skills.slice(0, 8).map((s) => (
+                      <Badge key={s} variant="secondary" className="text-[10px]">
+                        {s}
+                      </Badge>
+                    ))}
+                    {resume.summary.skills.length > 8 && (
+                      <Badge variant="outline" className="text-[10px]">
+                        +{resume.summary.skills.length - 8}
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+          {selectedResumeId && resume?.status === "failed" && (
+            <p className="text-xs text-destructive">{resume.error_message || "简历解析失败"}</p>
+          )}
+        </section>
+      )}
 
       {/* Select Banks */}
       <section className="space-y-3">
@@ -150,10 +251,16 @@ export default function NewInterviewPage() {
               </div>
             ))}
           </div>
+        ) : banksError ? (
+          <div className="flex flex-col items-center gap-3 py-8 text-center">
+            <AlertCircle className="h-8 w-8 text-red-500/50" />
+            <p className="text-sm text-muted-foreground">题库加载失败</p>
+            <Button size="sm" variant="outline" onClick={() => refetchBanks()}>重试</Button>
+          </div>
         ) : banks && banks.length > 0 ? (
           <div className="grid gap-2 sm:grid-cols-2">
             {banks.map((bank) => {
-              const selected = selectedBankIds.includes(bank.id)
+              const selected = activeBankIds.includes(bank.id)
               return (
                 <button
                   key={bank.id}
@@ -265,7 +372,7 @@ export default function NewInterviewPage() {
         className="w-full"
         size="lg"
         onClick={handleStart}
-        disabled={createSession.isPending || selectedBankIds.length === 0}
+        disabled={createSession.isPending || activeBankIds.length === 0}
       >
         {createSession.isPending ? (
           <>

@@ -1,9 +1,15 @@
 import json
+import logging
+import re
+from typing import Any
 
 import httpx
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from app.core.config import get_settings
+from app.core.errors import AppError
+
+logger = logging.getLogger("app.clients.llm")
 
 
 class ExtractedQuestion(BaseModel):
@@ -65,26 +71,41 @@ class LLMClient:
         if not self.settings.llm_api_key or not self.settings.llm_base_url:
             return self._rule_based_extract(normalized_text)
 
-        response = httpx.post(
-            f"{self.settings.llm_base_url.rstrip('/')}/chat/completions",
-            headers={"Authorization": f"Bearer {self.settings.llm_api_key}"},
-            json={
-                "model": self.settings.llm_model,
-                "messages": [
+        extracted_items: list[ExtractedQuestion] = []
+        for chunk in _split_text_chunks(normalized_text):
+            payload = self._chat_json(
+                [
                     {
                         "role": "system",
-                        "content": "从面试资料中抽取题目，严格返回 JSON：{\"items\": [...]}",
+                        "content": (
+                            "你是面试题库导入助手。请逐行扫描资料，穷尽抽取面试题，"
+                            "不要只总结重点，不要省略尾部内容。规则："
+                            "1. 每个明确问题、知识点标题、小节标题都尽量生成独立题目；"
+                            "2. 标题不是问句时，改写成自然的面试问句；"
+                            "3. 答案必须尽量保留原文细节和列表项，不要过度压缩；"
+                            "4. 不要把不同知识点合并成一道题；"
+                            "5. source_block_ids 填相关原文 block id。"
+                            "严格返回 JSON：{\"items\": [{\"question\": string, "
+                            "\"answer\": string|null, \"tags\": string[], "
+                            "\"difficulty_score\": number, \"difficulty_label\": string, "
+                            "\"source_block_ids\": string[], \"confidence\": number, "
+                            "\"notes\": string|null}]}"
+                        ),
                     },
-                    {"role": "user", "content": normalized_text},
+                    {"role": "user", "content": chunk},
                 ],
-                "response_format": {"type": "json_object"},
-                "thinking": {"enabled": self.settings.llm_thinking_enabled},
-            },
-            timeout=60,
-        )
-        payload = response.json()
-        content = payload["choices"][0]["message"]["content"]
-        return ExtractedQuestionList.model_validate(json.loads(content))
+                thinking=False,
+            )
+            try:
+                extracted_items.extend(ExtractedQuestionList.model_validate(payload).items)
+            except ValidationError as exc:
+                raise AppError(
+                    "LLM_INVALID_RESPONSE",
+                    "大模型抽题响应格式无效",
+                    status_code=502,
+                ) from exc
+
+        return ExtractedQuestionList(items=_dedupe_questions(extracted_items))
 
     def select_interview_questions(
         self,
@@ -118,6 +139,7 @@ class LLMClient:
                     ),
                 },
             ],
+            thinking=True,
         )
         return InterviewSelection.model_validate(payload)
 
@@ -160,6 +182,7 @@ class LLMClient:
                     ),
                 },
             ],
+            thinking=False,
         )
         return InterviewFeedback.model_validate(payload)
 
@@ -190,25 +213,59 @@ class LLMClient:
                     ),
                 },
             ],
+            thinking=True,
         )
         return InterviewSummaryResult.model_validate(payload)
 
-    def _chat_json(self, messages: list[dict[str, str]]) -> dict:
-        response = httpx.post(
-            f"{self.settings.llm_base_url.rstrip('/')}/chat/completions",
-            headers={"Authorization": f"Bearer {self.settings.llm_api_key}"},
-            json={
-                "model": self.settings.llm_model,
-                "messages": messages,
-                "response_format": {"type": "json_object"},
-                "thinking": {"enabled": self.settings.llm_thinking_enabled},
-            },
-            timeout=60,
-        )
-        response.raise_for_status()
-        payload = response.json()
-        content = payload["choices"][0]["message"]["content"]
-        return json.loads(content)
+    def _chat_json(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        thinking: bool | None = None,
+    ) -> dict[str, Any]:
+        if not self.settings.llm_api_key or not self.settings.llm_base_url:
+            raise AppError("LLM_NOT_CONFIGURED", "大模型服务未配置", status_code=503)
+
+        request_payload: dict[str, Any] = {
+            "model": self.settings.llm_model,
+            "messages": messages,
+            "response_format": {"type": "json_object"},
+        }
+        use_thinking = self.settings.llm_thinking_enabled if thinking is None else thinking
+        if use_thinking:
+            request_payload["thinking"] = {"enabled": True}
+
+        try:
+            response = httpx.post(
+                f"{self.settings.llm_base_url.rstrip('/')}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {self.settings.llm_api_key}",
+                    "Content-Type": "application/json",
+                },
+                json=request_payload,
+                timeout=60,
+                trust_env=False,
+            )
+            response.raise_for_status()
+            payload = response.json()
+            content = payload["choices"][0]["message"]["content"]
+            parsed = _parse_json_object(str(content))
+        except httpx.HTTPStatusError as exc:
+            status_code = exc.response.status_code
+            logger.warning("llm_http_error status_code=%s", status_code)
+            raise AppError("LLM_REQUEST_FAILED", "大模型服务请求失败", status_code=502) from exc
+        except (
+            httpx.HTTPError,
+            ImportError,
+            KeyError,
+            IndexError,
+            TypeError,
+            json.JSONDecodeError,
+        ) as exc:
+            logger.warning("llm_invalid_response error=%s", exc.__class__.__name__)
+            raise AppError("LLM_INVALID_RESPONSE", "大模型响应无法解析", status_code=502) from exc
+
+        return parsed
 
     def _rule_based_extract(self, normalized_text: str) -> ExtractedQuestionList:
         items: list[ExtractedQuestion] = []
@@ -322,6 +379,53 @@ def _extract_block_id(line: str) -> str | None:
     if line.startswith("[") and "]" in line:
         return line[1 : line.index("]")]
     return None
+
+
+def _parse_json_object(content: str) -> dict[str, Any]:
+    stripped = content.strip()
+    if stripped.startswith("```"):
+        stripped = re.sub(r"^```(?:json)?\s*", "", stripped)
+        stripped = re.sub(r"\s*```$", "", stripped)
+    try:
+        parsed = json.loads(stripped)
+    except json.JSONDecodeError:
+        match = re.search(r"\{.*\}", stripped, flags=re.S)
+        if not match:
+            raise
+        parsed = json.loads(match.group(0))
+    if not isinstance(parsed, dict):
+        raise json.JSONDecodeError("LLM response must be a JSON object", stripped, 0)
+    return parsed
+
+
+def _split_text_chunks(text: str, max_chars: int = 2800) -> list[str]:
+    lines = [line for line in text.splitlines() if line.strip()]
+    chunks: list[str] = []
+    current: list[str] = []
+    current_len = 0
+    for line in lines:
+        line_len = len(line) + 1
+        if current and current_len + line_len > max_chars:
+            chunks.append("\n".join(current))
+            current = []
+            current_len = 0
+        current.append(line)
+        current_len += line_len
+    if current:
+        chunks.append("\n".join(current))
+    return chunks or [text]
+
+
+def _dedupe_questions(items: list[ExtractedQuestion]) -> list[ExtractedQuestion]:
+    deduped: list[ExtractedQuestion] = []
+    seen: set[str] = set()
+    for item in items:
+        key = re.sub(r"\s+", "", item.question.lower().strip(" ?？。"))
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        deduped.append(item)
+    return deduped
 
 
 def _build_item(question: str, answer: str, source_blocks: list[str]) -> ExtractedQuestion:

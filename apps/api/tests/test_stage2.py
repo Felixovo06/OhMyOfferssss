@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 
 from app.clients.feishu import FeishuClient
+from app.services.imports import service as imports_service
 from tests.test_stage1 import login
 
 
@@ -49,6 +50,12 @@ def test_question_bank_and_question_crud(client: TestClient) -> None:
     assert update_question.status_code == 200
     assert update_question.json()["data"]["enabled"] is False
     assert update_question.json()["data"]["difficulty_label"] == "hard"
+
+    delete_bank = client.delete(f"/api/v1/question-banks/{bank['id']}", headers=headers)
+    assert delete_bank.status_code == 200
+
+    missing_bank = client.get(f"/api/v1/question-banks/{bank['id']}", headers=headers)
+    assert missing_bank.status_code == 404
 
 
 def test_frontend_bank_alias_contract(client: TestClient) -> None:
@@ -145,9 +152,7 @@ def test_feishu_import_confirm_flow(client: TestClient, monkeypatch) -> None:
     )
     assert import_response.status_code == 200
     batch = import_response.json()["data"]
-    assert batch["status"] == "completed"
-    assert "事件循环" in batch["normalized_text"]
-    assert batch["total_count"] == 1
+    assert batch["status"] == "pending_confirmation"
 
     items_response = client.get(f"/api/v1/imports/{batch['id']}/items", headers=headers)
     assert items_response.status_code == 200
@@ -159,6 +164,9 @@ def test_feishu_import_confirm_flow(client: TestClient, monkeypatch) -> None:
     detail_response = client.get(f"/api/v1/imports/{batch['id']}", headers=headers)
     assert detail_response.status_code == 200
     assert detail_response.json()["data"]["batch"]["id"] == batch["id"]
+    assert detail_response.json()["data"]["batch"]["status"] == "pending_confirmation"
+    assert "事件循环" in detail_response.json()["data"]["batch"]["normalized_text"]
+    assert detail_response.json()["data"]["batch"]["total_count"] == 1
     assert len(detail_response.json()["data"]["items"]) == 1
 
     confirm_response = client.post(f"/api/v1/imports/{batch['id']}/confirm", headers=headers)
@@ -168,3 +176,130 @@ def test_feishu_import_confirm_flow(client: TestClient, monkeypatch) -> None:
     questions = client.get(f"/api/v1/question-banks/{bank_id}/questions", headers=headers)
     assert questions.status_code == 200
     assert questions.json()["data"][0]["source_type"] == "feishu_import"
+
+    delete_imported = client.delete(
+        f"/api/v1/questions/{questions.json()['data'][0]['id']}",
+        headers=headers,
+    )
+    assert delete_imported.status_code == 200
+
+
+def test_delete_bank_with_confirmed_import_batch(client: TestClient, monkeypatch) -> None:
+    def mock_blocks(self, document_id: str, document_type: str) -> dict:
+        return self._mock_blocks(document_id, document_type)
+
+    monkeypatch.setattr(FeishuClient, "fetch_document_blocks", mock_blocks)
+    token = login(client, "delete-import-bank-owner@example.com")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    bank_response = client.post("/api/v1/banks", json={"name": "可删除导入题库"}, headers=headers)
+    bank_id = bank_response.json()["data"]["id"]
+    import_response = client.post(
+        "/api/v1/imports/feishu",
+        json={"bank_id": bank_id, "url": "https://example.feishu.cn/docx/DELETEBANK"},
+        headers=headers,
+    )
+    batch_id = import_response.json()["data"]["id"]
+    confirm_response = client.post(f"/api/v1/imports/{batch_id}/confirm", headers=headers)
+    assert confirm_response.status_code == 200
+
+    delete_bank = client.delete(f"/api/v1/banks/{bank_id}", headers=headers)
+    assert delete_bank.status_code == 200
+
+    missing_bank = client.get(f"/api/v1/banks/{bank_id}", headers=headers)
+    assert missing_bank.status_code == 404
+
+
+def test_github_markdown_import_confirm_flow(client: TestClient, monkeypatch, tmp_path) -> None:
+    repo_dir = tmp_path / "repo"
+    java_dir = repo_dir / "docs" / "java"
+    java_dir.mkdir(parents=True)
+    (java_dir / "jvm.md").write_text(
+        "# JVM\n\n"
+        "## 什么是类加载机制？\n\n"
+        "类加载机制包括加载、验证、准备、解析和初始化。\n\n"
+        "- Java 中 == 和 equals 有什么区别？\n\n"
+        "== 比较引用或基本类型值，equals 通常比较对象语义。\n",
+        encoding="utf-8",
+    )
+
+    def mock_extract(payload):
+        return imports_service.extract_markdown_questions_from_dir(
+            repo_dir,
+            include_paths=payload.include_paths,
+            max_files=payload.max_files,
+        )
+
+    monkeypatch.setattr(imports_service, "extract_github_markdown_questions", mock_extract)
+    token = login(client, "github-import-owner@example.com")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    bank_response = client.post(
+        "/api/v1/question-banks",
+        json={"name": "JavaGuide"},
+        headers=headers,
+    )
+    bank_id = bank_response.json()["data"]["id"]
+    import_response = client.post(
+        "/api/v1/imports/github",
+        json={
+            "bank_id": bank_id,
+            "repo_url": "https://github.com/Snailclimb/JavaGuide/tree/main/docs/java",
+        },
+        headers=headers,
+    )
+
+    assert import_response.status_code == 200
+    batch = import_response.json()["data"]
+    assert batch["status"] == "pending_confirmation"
+    assert batch["total_count"] == 2
+    assert "docs/java/jvm.md" in batch["normalized_text"]
+    assert batch["items"][0]["status"] == "pending"
+
+    confirm_response = client.post(f"/api/v1/imports/{batch['id']}/confirm", headers=headers)
+    assert confirm_response.status_code == 200
+    assert confirm_response.json()["data"]["confirmed_count"] == 2
+
+    questions = client.get(f"/api/v1/question-banks/{bank_id}/questions", headers=headers)
+    assert questions.status_code == 200
+    imported = questions.json()["data"]
+    assert {question["source_type"] for question in imported} == {"github_import"}
+
+
+def test_github_tree_url_is_normalized_to_repo_ref_and_path() -> None:
+    repo_url, ref, include_paths = imports_service.normalize_github_import_target(
+        "https://github.com/Snailclimb/JavaGuide/tree/main/docs/ai",
+        None,
+        [],
+    )
+
+    assert repo_url == "https://github.com/Snailclimb/JavaGuide.git"
+    assert ref == "main"
+    assert include_paths == ["docs/ai"]
+
+
+def test_feishu_import_batch_rejects_pending_items(client: TestClient, monkeypatch) -> None:
+    def mock_blocks(self, document_id: str, document_type: str) -> dict:
+        return self._mock_blocks(document_id, document_type)
+
+    monkeypatch.setattr(FeishuClient, "fetch_document_blocks", mock_blocks)
+    token = login(client, "import-reject-owner@example.com")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    bank_response = client.post("/api/v1/banks", json={"name": "批量删除题库"}, headers=headers)
+    batch_response = client.post(
+        "/api/v1/imports",
+        json={
+            "bank_id": bank_response.json()["data"]["id"],
+            "url": "https://example.feishu.cn/docx/REJECT123",
+        },
+        headers=headers,
+    )
+    batch_id = batch_response.json()["data"]["id"]
+
+    reject_response = client.post(f"/api/v1/imports/{batch_id}/reject", headers=headers)
+
+    assert reject_response.status_code == 200
+    assert reject_response.json()["data"]["rejected_count"] == 1
+    items_response = client.get(f"/api/v1/imports/{batch_id}/items", headers=headers)
+    assert items_response.json()["data"][0]["status"] == "rejected"

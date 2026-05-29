@@ -35,7 +35,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
-import { BookOpen, Plus, Loader2, Trash2, Library } from "lucide-react"
+import { Plus, Loader2, Trash2, Library } from "lucide-react"
 import { toast } from "sonner"
 
 const createBankSchema = z.object({

@@ -15,8 +15,8 @@ class Settings(BaseSettings):
         alias="BACKEND_CORS_ORIGINS",
     )
 
-    database_url: str = "postgresql+psycopg://postgres:postgres@39.104.87.235:5432/postgres"
-    redis_url: str = "redis://:password@39.104.87.235:6379/0"
+    database_url: str = "postgresql+psycopg://postgres:postgres@localhost:5432/ohmyoffer"
+    redis_url: str = "redis://localhost:6379/0"
 
     jwt_secret: str = "change-me-in-env"
     jwt_algorithm: str = "HS256"
@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     auth_cookie_name: str = "ohmyoffer_access_token"
     secure_cookies: bool = False
 
-    llm_model: str = "deepseek4flash"
+    llm_model: str = "deepseek-v4-flash"
     llm_thinking_enabled: bool = False
     llm_api_key: str | None = None
     llm_base_url: str | None = None
@@ -33,6 +33,8 @@ class Settings(BaseSettings):
     feishu_app_secret: str | None = None
     feishu_api_base_url: str = "https://open.feishu.cn/open-apis"
     feishu_token_cache_ttl_seconds: int = 6600
+
+    github_proxy_url: str | None = "socks5h://127.0.0.1:10808"
 
     @property
     def backend_cors_origins(self) -> list[str]:

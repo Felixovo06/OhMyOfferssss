@@ -9,6 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -19,13 +20,14 @@ import {
   ArrowRight,
   FileInput,
   Sparkles,
+  AlertCircle,
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 
 export default function DashboardPage() {
   const { user } = useAuthStore()
-  const { data: groups } = useGroups()
+  const { data: groups, isLoading, error, refetch } = useGroups()
   const router = useRouter()
 
   const totalQuestions = 0
@@ -44,6 +46,32 @@ export default function DashboardPage() {
         </p>
       </div>
 
+      {isLoading ? (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {[1, 2, 3, 4].map((i) => (
+            <Card key={i}>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <Skeleton className="h-4 w-16" />
+                <Skeleton className="h-4 w-4" />
+              </CardHeader>
+              <CardContent>
+                <Skeleton className="h-8 w-12" />
+                <Skeleton className="mt-1 h-3 w-24" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : error ? (
+        <div className="flex flex-col items-center gap-4 py-16 text-center">
+          <AlertCircle className="h-12 w-12 text-red-500/50" />
+          <div>
+            <p className="text-lg font-medium">数据加载失败</p>
+            <p className="text-sm text-muted-foreground">{error.message || "请稍后重试"}</p>
+          </div>
+          <Button variant="outline" onClick={() => refetch()}>重试</Button>
+        </div>
+      ) : (
+      <>
       {/* Stats */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
@@ -184,6 +212,8 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+      </>
+      )}
     </div>
   )
 }

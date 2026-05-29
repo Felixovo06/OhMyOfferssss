@@ -4,6 +4,7 @@ import {
   getSession,
   startSession,
   submitAnswer,
+  updateQuestionDifficulty,
   nextQuestion,
   getSummary,
 } from "@/lib/api/interviews"
@@ -51,16 +52,36 @@ export function useSubmitAnswer() {
       sessionId,
       questionId,
       answer,
+      difficulty,
     }: {
       sessionId: string
       questionId: string
       answer: string
-    }) => submitAnswer(sessionId, questionId, answer),
+      difficulty?: number | null
+    }) => submitAnswer(sessionId, questionId, answer, difficulty),
     onSuccess: (_data, { sessionId }) => {
       queryClient.invalidateQueries({ queryKey: ["interviews", sessionId] })
     },
     onError: (err) => {
       toast.error(err.message || "提交失败")
+    },
+  })
+}
+
+export function useUpdateQuestionDifficulty() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ questionId, difficulty }: {
+      sessionId: string
+      questionId: string
+      difficulty?: number | null
+    }) => updateQuestionDifficulty(questionId, difficulty),
+    onSuccess: (_data, { sessionId }) => {
+      queryClient.invalidateQueries({ queryKey: ["interviews", sessionId] })
+    },
+    onError: (err) => {
+      toast.error(err.message || "难度保存失败")
     },
   })
 }

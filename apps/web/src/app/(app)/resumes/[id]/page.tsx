@@ -12,7 +12,6 @@ import {
   FileText,
   Sparkles,
   AlertCircle,
-  CheckCircle,
   Briefcase,
   GraduationCap,
   Code,

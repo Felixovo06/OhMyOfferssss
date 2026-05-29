@@ -1,20 +1,27 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, BackgroundTasks, Depends
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
+from app.core.config import get_settings
 from app.db.models import User
 from app.schemas.common import ApiResponse
 from app.schemas.imports import (
     FeishuImportRequest,
+    GithubImportRequest,
     ImportBatchOut,
     ImportConfirmResponse,
     ImportDetailOut,
     ImportItemOut,
     ImportItemUpdate,
+    ImportRejectResponse,
 )
-from app.services.imports.service import ImportService
+from app.services.imports.service import (
+    ImportService,
+    process_confirm_import_batch,
+    process_feishu_import_batch,
+)
 
 router = APIRouter()
 
@@ -23,10 +30,27 @@ router = APIRouter()
 @router.post("/imports", response_model=ApiResponse[ImportBatchOut])
 def import_feishu(
     payload: FeishuImportRequest,
+    background_tasks: BackgroundTasks,
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> ApiResponse[ImportBatchOut]:
-    batch = ImportService(db).import_feishu(current_user, payload)
+    service = ImportService(db)
+    batch = service.queue_feishu_import(current_user, payload)
+    if get_settings().environment == "test":
+        service.process_queued_import_batch(batch.id)
+        batch = service.get_batch_for_user(current_user, batch.id)
+    else:
+        background_tasks.add_task(process_feishu_import_batch, batch.id)
+    return ApiResponse(data=batch_to_out(batch))
+
+
+@router.post("/imports/github", response_model=ApiResponse[ImportBatchOut])
+def import_github(
+    payload: GithubImportRequest,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> ApiResponse[ImportBatchOut]:
+    batch = ImportService(db).import_github_markdown(current_user, payload)
     return ApiResponse(data=batch_to_out(batch))
 
 
@@ -91,15 +115,35 @@ def reject_import_item(
     return ApiResponse(data=item_to_out(item))
 
 
-@router.post("/imports/{batch_id}/confirm", response_model=ApiResponse[ImportConfirmResponse])
-def confirm_import_batch(
+@router.post("/imports/{batch_id}/reject", response_model=ApiResponse[ImportRejectResponse])
+def reject_import_batch(
     batch_id: str,
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
+) -> ApiResponse[ImportRejectResponse]:
+    count = ImportService(db).reject_batch(current_user, batch_id)
+    return ApiResponse(data=ImportRejectResponse(rejected_count=count))
+
+
+@router.post("/imports/{batch_id}/confirm", response_model=ApiResponse[ImportConfirmResponse])
+def confirm_import_batch(
+    batch_id: str,
+    background_tasks: BackgroundTasks,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
 ) -> ApiResponse[ImportConfirmResponse]:
-    count, question_ids = ImportService(db).confirm_batch(current_user, batch_id)
+    service = ImportService(db)
+    count = service.queue_confirm_batch(current_user, batch_id)
+    if count:
+        if get_settings().environment == "test":
+            count, question_ids = service.confirm_batch(current_user, batch_id)
+            return ApiResponse(
+                data=ImportConfirmResponse(confirmed_count=count, question_ids=question_ids),
+            )
+        else:
+            background_tasks.add_task(process_confirm_import_batch, batch_id, current_user.id)
     return ApiResponse(
-        data=ImportConfirmResponse(confirmed_count=count, question_ids=question_ids),
+        data=ImportConfirmResponse(confirmed_count=0, question_ids=[]),
     )
 
 
@@ -114,6 +158,7 @@ def item_to_out(item) -> ImportItemOut:  # type: ignore[no-untyped-def]
             "question_answer": item.answer,
             "status": frontend_status,
             "confidence": frontend_confidence,
+            "difficulty": item.difficulty_score,
         },
     )
 
@@ -134,8 +179,4 @@ def batch_to_out(batch) -> ImportBatchOut:  # type: ignore[no-untyped-def]
 
 
 def _batch_status_for_frontend(batch) -> str:  # type: ignore[no-untyped-def]
-    if batch.status == "pending_confirmation":
-        return "completed"
-    if batch.status == "confirmed":
-        return "completed"
     return batch.status

@@ -575,10 +575,8 @@ updated_at
 
 运行环境配置：
 
-- PostgreSQL 主机：`39.104.87.235`
-- PostgreSQL 端口：`5432`
-- Redis 主机：`39.104.87.235`
-- Redis 端口：`6379`
+- PostgreSQL：通过 `DATABASE_URL` 配置，开发环境默认使用本地实例。
+- Redis：通过 `REDIS_URL` 配置，开发环境默认使用本地实例。
 - 真实数据库密码、Redis 密码和 API Key 只允许放在本地 `.env` 或部署平台密钥管理中，不写入仓库。
 
 仓库提供 `.env.example` 作为配置模板。

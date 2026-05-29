@@ -17,7 +17,7 @@ const statusConfig: Record<string, { label: string; icon: typeof Clock; color: s
 
 export default function ResumesPage() {
   const router = useRouter()
-  const { data: resumes, isLoading } = useResumes()
+  const { data: resumes, isLoading, error, refetch } = useResumes()
 
   return (
     <div className="space-y-6 p-6">
@@ -46,6 +46,15 @@ export default function ResumesPage() {
               <Skeleton className="h-5 w-16 rounded-full" />
             </div>
           ))}
+        </div>
+      ) : error ? (
+        <div className="flex flex-col items-center gap-4 py-16 text-center">
+          <AlertCircle className="h-12 w-12 text-red-500/50" />
+          <div>
+            <p className="text-lg font-medium">加载失败</p>
+            <p className="text-sm text-muted-foreground">{error.message || "请稍后重试"}</p>
+          </div>
+          <Button variant="outline" onClick={() => refetch()}>重试</Button>
         </div>
       ) : resumes && resumes.length > 0 ? (
         <div className="space-y-2">

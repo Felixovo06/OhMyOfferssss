@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 
 from app.core.errors import AppError
-from app.db.models import Question, User
+from app.db.models import ImportItem, Question, User
 from app.db.repositories.questions import QuestionRepository
 from app.schemas.questions import QuestionCreate, QuestionUpdate
 from app.services.question_banks.service import QuestionBankService
@@ -39,8 +39,16 @@ class QuestionService:
         content = payload.question or payload.content
         if not content:
             raise AppError("VALIDATION_ERROR", "题目内容不能为空", status_code=422)
-        difficulty_score = payload.difficulty or payload.difficulty_score
-        difficulty_label = payload.difficulty_label or difficulty_label_for_score(difficulty_score)
+        difficulty_score = (
+            payload.difficulty if payload.difficulty is not None else payload.difficulty_score
+        )
+        difficulty_label = (
+            payload.difficulty_label
+            if payload.difficulty_label is not None
+            else difficulty_label_for_score(difficulty_score)
+            if difficulty_score is not None
+            else None
+        )
         enabled = payload.enabled if payload.status is None else payload.status != "disabled"
         question = self.questions.create(
             bank_id,
@@ -91,6 +99,11 @@ class QuestionService:
 
     def delete_question(self, user: User, question_id: str) -> None:
         question = self.get_question(user, question_id)
+        linked_items = self.db.query(ImportItem).filter(
+            ImportItem.confirmed_question_id == question.id,
+        )
+        for item in linked_items:
+            item.confirmed_question_id = None
         self.db.delete(question)
         self.db.commit()
 

@@ -10,6 +10,7 @@ from app.schemas.common import ApiResponse
 from app.schemas.interviews import (
     InterviewAnswerCreate,
     InterviewCreate,
+    InterviewDifficultyUpdate,
     InterviewItemOut,
     InterviewQuestionFeedback,
     InterviewSessionOut,
@@ -63,6 +64,20 @@ def answer_interview_item(
     return ApiResponse(data=item_to_out(item))
 
 
+@router.patch(
+    "/interviews/items/{item_id}/difficulty",
+    response_model=ApiResponse[InterviewItemOut],
+)
+def update_interview_item_difficulty(
+    item_id: str,
+    payload: InterviewDifficultyUpdate,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> ApiResponse[InterviewItemOut]:
+    item = InterviewService(db).update_item_difficulty(current_user, item_id, payload)
+    return ApiResponse(data=item_to_out(item))
+
+
 @router.post("/interviews/{session_id}/complete", response_model=ApiResponse[InterviewSessionOut])
 def complete_interview(
     session_id: str,
@@ -104,4 +119,3 @@ def item_to_out(item: InterviewItem) -> InterviewItemOut:
             "question": question_to_out(item.question),
         },
     )
-

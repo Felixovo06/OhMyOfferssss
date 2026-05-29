@@ -6,9 +6,9 @@ from app.clients.llm import InterviewCandidate, LLMClient
 from app.core.errors import AppError
 from app.db.models import InterviewItem, InterviewSession, Question, User
 from app.db.repositories.interviews import InterviewRepository
-from app.schemas.interviews import InterviewAnswerCreate, InterviewCreate
+from app.schemas.interviews import InterviewAnswerCreate, InterviewCreate, InterviewDifficultyUpdate
 from app.services.question_banks.service import QuestionBankService
-from app.services.questions.service import QuestionService
+from app.services.questions.service import QuestionService, difficulty_label_for_score
 from app.services.resumes.service import ResumeService
 
 
@@ -58,8 +58,8 @@ class InterviewService:
                     question=question.question,
                     answer=question.answer,
                     tags=question.tag_names,
-                    difficulty_score=question.difficulty_score,
-                    difficulty_label=question.difficulty_label,
+                    difficulty_score=question.difficulty_score or 50,
+                    difficulty_label=question.difficulty_label or "medium",
                 )
                 for question in candidates
             ],
@@ -122,12 +122,44 @@ class InterviewService:
                 item.session.resume.summary_json if item.session.resume else None,
             ),
         )
+        difficulty_score = (
+            payload.difficulty if payload.difficulty is not None else payload.difficulty_score
+        )
+        if difficulty_score is not None:
+            item.question.difficulty_score = difficulty_score
+            item.question.difficulty_label = difficulty_label_for_score(difficulty_score)
         item.answer = payload.answer
         item.feedback_json = feedback.model_dump()
         item.status = "answered"
         item.answered_at = datetime.now(UTC)
         if item.session.status == "ready":
             item.session.status = "in_progress"
+        self.db.commit()
+        refreshed = self.interviews.get_item(item.id)
+        if refreshed is None:
+            raise AppError("INTERVIEW_ITEM_NOT_FOUND", "面试题不存在", status_code=404)
+        return refreshed
+
+    def update_item_difficulty(
+        self,
+        user: User,
+        item_id: str,
+        payload: InterviewDifficultyUpdate,
+    ) -> InterviewItem:
+        item = self.interviews.get_item(item_id)
+        if item is None:
+            raise AppError("INTERVIEW_ITEM_NOT_FOUND", "面试题不存在", status_code=404)
+        if item.session.created_by_id != user.id:
+            raise AppError("FORBIDDEN", "无权修改该面试题", status_code=403)
+        difficulty_score = (
+            payload.difficulty if payload.difficulty is not None else payload.difficulty_score
+        )
+        if difficulty_score is None:
+            item.question.difficulty_score = None
+            item.question.difficulty_label = None
+        else:
+            item.question.difficulty_score = difficulty_score
+            item.question.difficulty_label = difficulty_label_for_score(difficulty_score)
         self.db.commit()
         refreshed = self.interviews.get_item(item.id)
         if refreshed is None:
@@ -173,12 +205,19 @@ class InterviewService:
                     continue
                 if (
                     payload.difficulty_min is not None
+                    and question.difficulty_score is not None
                     and question.difficulty_score < payload.difficulty_min
                 ):
                     continue
                 if (
                     payload.difficulty_max is not None
+                    and question.difficulty_score is not None
                     and question.difficulty_score > payload.difficulty_max
+                ):
+                    continue
+                if (
+                    (payload.difficulty_min is not None or payload.difficulty_max is not None)
+                    and question.difficulty_score is None
                 ):
                     continue
                 if tags and not tags.intersection(question.tag_names):

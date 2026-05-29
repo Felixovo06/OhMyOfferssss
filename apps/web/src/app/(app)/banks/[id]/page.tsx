@@ -42,7 +42,6 @@ import {
   Plus,
   Trash2,
   Search,
-  ArrowUpDown,
   BookOpen,
   Library,
   Eye,
@@ -64,6 +63,16 @@ const difficultyColors: Record<number, string> = {
   3: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400",
   4: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400",
   5: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+}
+
+function difficultyLabel(score?: number | null) {
+  if (score == null) return "未设置"
+  return difficultyLabels[score] ?? "未设置"
+}
+
+function difficultyColor(score?: number | null) {
+  if (score == null) return "bg-muted text-muted-foreground"
+  return difficultyColors[score] ?? "bg-muted text-muted-foreground"
 }
 
 const questionSchema = z.object({
@@ -154,7 +163,7 @@ export default function BankDetailPage() {
       content: q.content,
       answer: q.answer || "",
       tags: q.tags.join(", "),
-      difficulty: q.difficulty,
+      difficulty: q.difficulty ?? 3,
     })
   }
 
@@ -330,8 +339,8 @@ export default function BankDetailPage() {
                       </details>
                     )}
                     <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${difficultyColors[q.difficulty]}`}>
-                        {difficultyLabels[q.difficulty]}
+                      <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${difficultyColor(q.difficulty)}`}>
+                        {difficultyLabel(q.difficulty)}
                       </span>
                       {q.tags.map((tag) => (
                         <Badge key={tag} variant="outline" className="text-[10px]">

@@ -98,3 +98,52 @@ def test_interview_requires_enough_candidates(client: TestClient) -> None:
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "NOT_ENOUGH_QUESTIONS"
 
+
+def test_interview_can_persist_missing_question_difficulty(client: TestClient) -> None:
+    token = login(client, "interview-difficulty-owner@example.com")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    bank_response = client.post("/api/v1/banks", json={"name": "未定难度题库"}, headers=headers)
+    bank_id = bank_response.json()["data"]["id"]
+    question_response = client.post(
+        f"/api/v1/banks/{bank_id}/questions",
+        json={
+            "content": "请解释 RAG 的基本流程",
+            "answer": "通常包括文档处理、检索、上下文组装和生成。",
+            "tags": ["RAG"],
+        },
+        headers=headers,
+    )
+    assert question_response.status_code == 200
+    assert question_response.json()["data"]["difficulty"] is None
+    assert question_response.json()["data"]["difficulty_label"] is None
+
+    create_response = client.post(
+        "/api/v1/interviews",
+        json={"bank_ids": [bank_id], "question_count": 1, "target": "AI 应用工程师"},
+        headers=headers,
+    )
+    assert create_response.status_code == 200
+    item_id = create_response.json()["data"]["items"][0]["id"]
+
+    difficulty_response = client.patch(
+        f"/api/v1/interviews/items/{item_id}/difficulty",
+        json={"difficulty": 72},
+        headers=headers,
+    )
+    assert difficulty_response.status_code == 200
+    assert difficulty_response.json()["data"]["question"]["difficulty"] == 72
+    assert difficulty_response.json()["data"]["question"]["difficulty_label"] == "medium"
+
+    questions_response = client.get(f"/api/v1/banks/{bank_id}/questions", headers=headers)
+    assert questions_response.status_code == 200
+    assert questions_response.json()["data"][0]["difficulty"] == 72
+
+    answer_response = client.post(
+        f"/api/v1/interviews/items/{item_id}/answer",
+        json={"answer": "RAG 会先检索相关资料，再把资料放进提示词生成答案。", "difficulty": 85},
+        headers=headers,
+    )
+    assert answer_response.status_code == 200
+    assert answer_response.json()["data"]["question"]["difficulty"] == 85
+    assert answer_response.json()["data"]["question"]["difficulty_label"] == "hard"

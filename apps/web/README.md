@@ -1,36 +1,30 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Ohmyoffer Web
 
-## Getting Started
+Next.js frontend for the Ohmyoffer AI interview practice MVP.
 
-First, run the development server:
+## Local setup
 
 ```bash
+cd apps/web
+npm install
+cp .env.example .env.local
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open `http://localhost:3000`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Environment variables
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- `NEXT_PUBLIC_API_BASE_URL`: backend base URL, for example `http://127.0.0.1:8000`.
+- `NEXT_PUBLIC_USE_MOCK`: optional. Set to `true` to use browser-side mock data without the backend.
 
-## Learn More
+Only `NEXT_PUBLIC_*` variables belong in this app. Backend secrets such as database URLs, Redis URLs, LLM API keys, JWT secrets, and Feishu secrets must stay in `apps/api/.env`.
 
-To learn more about Next.js, take a look at the following resources:
+## Verification
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+npm run lint
+npm run build
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+The MVP expects the backend to be running before real API mode is used. In mock mode, the UI can be checked without backend services.

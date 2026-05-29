@@ -5,6 +5,7 @@ import {
   createImport,
   confirmImportItem,
   rejectImportItem,
+  rejectAllImportItems,
   confirmAllImportItems,
 } from "@/lib/api/imports"
 import type { ImportRequest } from "@/types/import"
@@ -14,6 +15,7 @@ export function useImportBatches() {
   return useQuery({
     queryKey: ["imports"],
     queryFn: () => getImportBatches(),
+    refetchInterval: 2000,
   })
 }
 
@@ -22,6 +24,7 @@ export function useImportDetail(batchId: string | null) {
     queryKey: ["imports", batchId],
     queryFn: () => getImportDetail(batchId!),
     enabled: !!batchId,
+    refetchInterval: 2000,
   })
 }
 
@@ -44,7 +47,7 @@ export function useConfirmImportItem() {
 
   return useMutation({
     mutationFn: (itemId: string) => confirmImportItem(itemId),
-    onSuccess: (_data, itemId) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["imports"] })
     },
   })
@@ -66,6 +69,17 @@ export function useConfirmAllImportItems() {
 
   return useMutation({
     mutationFn: (batchId: string) => confirmAllImportItems(batchId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["imports"] })
+    },
+  })
+}
+
+export function useRejectAllImportItems() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (batchId: string) => rejectAllImportItems(batchId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["imports"] })
     },

@@ -2,7 +2,13 @@
 
 import { useParams, useRouter } from "next/navigation"
 import { useState } from "react"
-import { useSession, useStartSession, useSubmitAnswer, useNextQuestion } from "@/lib/query/interviews"
+import {
+  useSession,
+  useStartSession,
+  useSubmitAnswer,
+  useUpdateQuestionDifficulty,
+  useNextQuestion,
+} from "@/lib/query/interviews"
 import { useResume } from "@/lib/query/resumes"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -10,7 +16,15 @@ import { Separator } from "@/components/ui/separator"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent } from "@/components/ui/card"
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
   Loader2,
+  AlertCircle,
   Sparkles,
   CheckCircle,
   ArrowRight,
@@ -39,25 +53,62 @@ const difficultyColors: Record<number, string> = {
   5: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
 }
 
+const difficultyOptions = [
+  { value: 20, label: "简单" },
+  { value: 40, label: "较易" },
+  { value: 60, label: "中等" },
+  { value: 80, label: "较难" },
+  { value: 95, label: "困难" },
+]
+
+function difficultyLabel(score?: number | null) {
+  if (score == null) return "未设置"
+  if (score <= 5) return difficultyLabels[score] ?? "未设置"
+  if (score <= 30) return "简单"
+  if (score <= 50) return "较易"
+  if (score <= 70) return "中等"
+  if (score <= 85) return "较难"
+  return "困难"
+}
+
+function difficultyColor(score?: number | null) {
+  if (score == null) return "bg-muted text-muted-foreground"
+  const bucket = score <= 5 ? score : score <= 30 ? 1 : score <= 50 ? 2 : score <= 70 ? 3 : score <= 85 ? 4 : 5
+  return difficultyColors[bucket]
+}
+
 export default function InterviewPage() {
   const params = useParams()
   const router = useRouter()
   const sessionId = params.id as string
 
-  const { data, isLoading } = useSession(sessionId)
+  const { data, isLoading, error } = useSession(sessionId)
   const resumeId = data?.session.resume_id ?? null
   const { data: resume } = useResume(resumeId)
   const startSession = useStartSession()
   const submitAnswer = useSubmitAnswer()
+  const updateDifficulty = useUpdateQuestionDifficulty()
   const nextQuestion = useNextQuestion()
 
   const [answer, setAnswer] = useState("")
+  const [difficulty, setDifficulty] = useState<string>("unchanged")
   const [showFeedback, setShowFeedback] = useState(false)
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-16">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center gap-4 py-16 text-center">
+        <AlertCircle className="h-12 w-12 text-red-500/50" />
+        <p className="text-lg font-medium">加载失败</p>
+        <p className="text-sm text-muted-foreground">{error.message || "请稍后重试"}</p>
+        <Button variant="outline" onClick={() => router.push("/interviews")}>返回面试</Button>
       </div>
     )
   }
@@ -127,8 +178,8 @@ export default function InterviewPage() {
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium">{q.content}</p>
                     <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${difficultyColors[q.difficulty]}`}>
-                        {difficultyLabels[q.difficulty]}
+                      <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${difficultyColor(q.difficulty)}`}>
+                        {difficultyLabel(q.difficulty)}
                       </span>
                       {q.tags.map((tag) => (
                         <Badge key={tag} variant="outline" className="text-[10px]">
@@ -213,8 +264,9 @@ export default function InterviewPage() {
       return
     }
     setShowFeedback(false)
+    const difficultyValue = difficulty === "unchanged" ? undefined : parseDifficulty(difficulty)
     submitAnswer.mutate(
-      { sessionId, questionId: currentQuestion.id, answer },
+      { sessionId, questionId: currentQuestion.id, answer, difficulty: difficultyValue },
       {
         onSuccess: () => {
           setShowFeedback(true)
@@ -223,11 +275,36 @@ export default function InterviewPage() {
     )
   }
 
+  function handleSaveDifficulty() {
+    const difficultyValue = parseDifficulty(difficultySelectValue)
+    updateDifficulty.mutate(
+      { sessionId, questionId: currentQuestion.id, difficulty: difficultyValue },
+      {
+        onSuccess: () => {
+          setDifficulty("unchanged")
+          toast.success("难度已保存")
+        },
+      },
+    )
+  }
+
   function handleNext() {
     setAnswer("")
+    setDifficulty("unchanged")
     setShowFeedback(false)
     nextQuestion.mutate(sessionId)
   }
+
+  function parseDifficulty(value: string) {
+    return value === "unset" ? null : Number(value)
+  }
+
+  const difficultySelectValue =
+    difficulty === "unchanged"
+      ? currentQuestion.difficulty == null
+        ? "unset"
+        : String(currentQuestion.difficulty)
+      : difficulty
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-6">
@@ -264,8 +341,8 @@ export default function InterviewPage() {
             <div className="min-w-0 flex-1">
               <p className="text-base font-medium leading-relaxed">{currentQuestion.content}</p>
               <div className="mt-3 flex flex-wrap items-center gap-2">
-                <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${difficultyColors[currentQuestion.difficulty]}`}>
-                  {difficultyLabels[currentQuestion.difficulty]}
+                <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${difficultyColor(currentQuestion.difficulty)}`}>
+                  {difficultyLabel(currentQuestion.difficulty)}
                 </span>
                 {currentQuestion.tags.map((tag) => (
                   <Badge key={tag} variant="outline" className="text-[10px]">
@@ -281,6 +358,34 @@ export default function InterviewPage() {
       {/* Answer Input */}
       {!showFeedback && currentQuestion.status === "pending" && (
         <div className="space-y-3">
+          <div className="flex items-end gap-2">
+            <div className="flex-1">
+              <label className="text-sm font-medium">题目难度</label>
+              <Select
+                value={difficultySelectValue}
+                onValueChange={(value) => setDifficulty(value ?? "unset")}
+              >
+                <SelectTrigger className="mt-1">
+                  <SelectValue placeholder="未设置" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="unset">未设置</SelectItem>
+                  {difficultyOptions.map((option) => (
+                    <SelectItem key={option.value} value={String(option.value)}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button
+              variant="outline"
+              onClick={handleSaveDifficulty}
+              disabled={updateDifficulty.isPending}
+            >
+              {updateDifficulty.isPending ? "保存中..." : "保存难度"}
+            </Button>
+          </div>
           <label className="text-sm font-medium">你的回答</label>
           <Textarea
             placeholder="在此输入你的回答..."

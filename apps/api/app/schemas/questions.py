@@ -10,7 +10,7 @@ class QuestionCreate(BaseModel):
     content: str | None = None
     answer: str | None = None
     tags: list[str] = Field(default_factory=list, max_length=12)
-    difficulty_score: int = Field(default=50, ge=0, le=100)
+    difficulty_score: int | None = Field(default=None, ge=0, le=100)
     difficulty: int | None = Field(default=None, ge=0, le=100)
     difficulty_label: str | None = None
     source_type: str = "manual"
@@ -57,9 +57,9 @@ class QuestionOut(BaseModel):
     content: str
     answer: str | None
     tags: list[str]
-    difficulty_score: int
-    difficulty: int
-    difficulty_label: str
+    difficulty_score: int | None
+    difficulty: int | None
+    difficulty_label: str | None
     source_type: str
     source_block_ids: list[str]
     enabled: bool

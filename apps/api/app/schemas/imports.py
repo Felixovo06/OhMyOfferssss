@@ -8,6 +8,14 @@ class FeishuImportRequest(BaseModel):
     bank_id: str | None = None
 
 
+class GithubImportRequest(BaseModel):
+    repo_url: str = Field(min_length=1)
+    bank_id: str | None = None
+    ref: str | None = None
+    include_paths: list[str] = Field(default_factory=list, max_length=20)
+    max_files: int = Field(default=120, ge=1, le=500)
+
+
 class ImportBatchOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -45,6 +53,7 @@ class ImportItemOut(BaseModel):
     answer: str | None
     question_answer: str | None
     tags: list[str]
+    difficulty: int
     difficulty_score: int
     difficulty_label: str
     source_block_ids: list[str]
@@ -59,6 +68,10 @@ class ImportItemOut(BaseModel):
 class ImportConfirmResponse(BaseModel):
     confirmed_count: int
     question_ids: list[str]
+
+
+class ImportRejectResponse(BaseModel):
+    rejected_count: int
 
 
 class ImportDetailOut(BaseModel):

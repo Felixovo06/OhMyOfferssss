@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation"
 import { useRef, useState } from "react"
 import { useUploadResume } from "@/lib/query/resumes"
 import { Button } from "@/components/ui/button"
-import { Upload, FileText, Loader2, ArrowLeft } from "lucide-react"
+import { Upload, Loader2, ArrowLeft } from "lucide-react"
 import { toast } from "sonner"
 
 export default function UploadResumePage() {

@@ -19,6 +19,14 @@ import {
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Separator } from "@/components/ui/separator"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { useState } from "react"
 
 const navItems = [
@@ -30,17 +38,19 @@ const navItems = [
   { href: "/imports", label: "飞书导入", icon: FileInput },
 ]
 
-export function Sidebar() {
+export function Sidebar({ onNavClick }: { onNavClick?: () => void }) {
   const pathname = usePathname()
   const { user } = useAuthStore()
   const logout = useLogout()
   const [collapsed, setCollapsed] = useState(false)
+  const [showLogoutDialog, setShowLogoutDialog] = useState(false)
 
   const initials = user?.name
     ? user.name.charAt(0).toUpperCase()
     : user?.email?.charAt(0).toUpperCase() || "?"
 
   return (
+    <>
     <aside
       className={cn(
         "flex flex-col border-r bg-card transition-all duration-200",
@@ -67,6 +77,7 @@ export function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
+              onClick={onNavClick}
               className={cn(
                 "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
                 isActive
@@ -109,7 +120,7 @@ export function Sidebar() {
             variant="ghost"
             size="sm"
             className="mt-1 w-full justify-start gap-2 text-muted-foreground"
-            onClick={() => logout.mutate()}
+            onClick={() => setShowLogoutDialog(true)}
           >
             <LogOut className="h-4 w-4" />
             退出
@@ -130,5 +141,27 @@ export function Sidebar() {
         />
       </button>
     </aside>
+
+      <Dialog open={showLogoutDialog} onOpenChange={setShowLogoutDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>确认退出</DialogTitle>
+            <DialogDescription>确定要退出登录吗？</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowLogoutDialog(false)}>
+              取消
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={logout.isPending}
+              onClick={() => logout.mutate()}
+            >
+              {logout.isPending ? "退出中..." : "确认退出"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }
