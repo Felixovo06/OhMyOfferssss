@@ -30,8 +30,8 @@ function ScoreBadge({ score, size = "md" }: { score: number; size?: "sm" | "md" 
       className={cn(
         "flex items-center justify-center rounded-full font-bold",
         sizeClasses[size],
-        score >= 8 ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" :
-        score >= 6 ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400" :
+        score >= 80 ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" :
+        score >= 60 ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400" :
         "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
       )}
     >
@@ -106,7 +106,7 @@ export default function SummaryPage() {
         <Card>
           <CardContent className="flex flex-col items-center gap-2 p-5">
             <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted text-xl font-bold text-foreground">
-              {answered.filter((q) => (q.score || 0) >= 6).length}
+              {answered.filter((q) => (q.score || 0) >= 60).length}
               <span className="text-sm text-muted-foreground">/{answered.length}</span>
             </div>
             <p className="text-xs text-muted-foreground">达标题数</p>

@@ -51,7 +51,10 @@ export function nextQuestion(sessionId: string, options?: { prefetch?: boolean }
 
 export function getSummary(id: string) {
   if (USE_MOCK) return mockInterviewApi.getSummary(id)
-  return api.get<InterviewSummary>(`/api/v1/interviews/${id}/summary`)
+  return Promise.all([
+    api.get<BackendInterviewSession>(`/api/v1/interviews/${id}`),
+    api.get<BackendInterviewSummary>(`/api/v1/interviews/${id}/summary`),
+  ]).then(([sessionRaw, summaryRaw]) => normalizeSummary(sessionRaw, summaryRaw))
 }
 
 interface BackendInterviewSession {
@@ -87,6 +90,17 @@ interface BackendInterviewItem {
   intention?: string
 }
 
+interface BackendInterviewSummary {
+  score: number
+  strengths?: string[]
+  weaknesses?: string[]
+  next_steps?: string[]
+  project_performance?: InterviewSummary["project_performance"]
+  knowledge_performance?: InterviewSummary["knowledge_performance"]
+  review_plan?: InterviewSummary["review_plan"]
+  comment: string
+}
+
 function normalizeSession(raw: BackendInterviewSession): {
   session: InterviewSession
   questions: InterviewQuestion[]
@@ -103,6 +117,7 @@ function normalizeSession(raw: BackendInterviewSession): {
     status: item.status,
     answer: item.answer ?? undefined,
     feedback: item.feedback,
+    score: item.feedback?.score,
     related_project: item.related_project ?? undefined,
     related_skills: item.related_skills ?? [],
     intention: item.intention,
@@ -133,5 +148,27 @@ function normalizeSession(raw: BackendInterviewSession): {
       updated_at: raw.updated_at,
     },
     questions,
+  }
+}
+
+function normalizeSummary(
+  sessionRaw: BackendInterviewSession,
+  summaryRaw: BackendInterviewSummary,
+): InterviewSummary {
+  const normalized = normalizeSession(sessionRaw)
+  const weakTags = (summaryRaw.knowledge_performance ?? [])
+    .filter((item) => item.mastery < 0.6)
+    .map((item) => item.tag)
+  return {
+    session: normalized.session,
+    questions: normalized.questions,
+    overall_score: summaryRaw.score,
+    weak_tags: weakTags,
+    recommendations: summaryRaw.next_steps ?? summaryRaw.review_plan?.map((item) => item.suggestion) ?? [],
+    project_performance: summaryRaw.project_performance ?? [],
+    knowledge_performance: summaryRaw.knowledge_performance ?? [],
+    strengths: summaryRaw.strengths ?? [],
+    weaknesses: summaryRaw.weaknesses ?? [],
+    review_plan: summaryRaw.review_plan ?? [],
   }
 }
