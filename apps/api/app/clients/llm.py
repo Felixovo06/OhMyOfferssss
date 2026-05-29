@@ -143,7 +143,8 @@ class LLMClient:
                     "content": (
                         "你是面试反馈助手。请评分并给出缺失点、参考表达和追问，严格返回 JSON："
                         "{\"score\": number, \"missing_points\": string[], "
-                        "\"reference_answer\": string, \"follow_up\": string|null, \"comment\": string}"
+                        "\"reference_answer\": string, \"follow_up\": string|null, "
+                        "\"comment\": string}"
                     ),
                 },
                 {
